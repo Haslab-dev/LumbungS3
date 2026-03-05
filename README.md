@@ -4,7 +4,7 @@ LumbungS3 is a lightweight, self-hosted, S3-compatible object storage system wit
 
 The name **“Lumbung”** refers to the traditional Indonesian rice storage house, symbolizing a reliable place to store your valuable digital resources.
 
-![Dashboard Preview](https://via.placeholder.com/1200x600/0f172a/6366f1?text=LumbungS3+Dashboard+Preview)
+![Dashboard Preview](dashboard.png)
 
 ## ✨ Features
 

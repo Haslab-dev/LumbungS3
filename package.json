@@ -11,7 +11,10 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "predev": "kill-port 5173 9000 || true",
-    "test": "bun test"
+    "test": "bun test",
+    "db:push": "drizzle-kit push",
+    "db:generate": "drizzle-kit generate",
+    "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.2.1",
