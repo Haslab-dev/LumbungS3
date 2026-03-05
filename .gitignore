@@ -26,3 +26,5 @@ dist-ssr
 .env
 docs/
 
+storage/*
+metadata.db*

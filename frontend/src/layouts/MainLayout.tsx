@@ -1,10 +1,16 @@
-import { Sidebar } from './Sidebar';
+import { Sidebar, ViewType } from './Sidebar';
 import { Bell, Search, User } from 'lucide-react';
 
-export const MainLayout = ({ children }: { children: React.ReactNode }) => {
+interface MainLayoutProps {
+  children: React.ReactNode;
+  currentView: ViewType;
+  onNavigate: (view: ViewType) => void;
+}
+
+export const MainLayout = ({ children, currentView, onNavigate }: MainLayoutProps) => {
   return (
     <div className="min-h-screen flex bg-surface-900">
-      <Sidebar />
+      <Sidebar currentView={currentView} onNavigate={onNavigate} />
       <main className="flex-1 ml-64 min-h-screen">
         {/* Top Navbar */}
         <header className="h-16 glass-nav flex items-center justify-between px-8 sticky top-0 z-40">

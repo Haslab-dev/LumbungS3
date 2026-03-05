@@ -9,10 +9,11 @@ export function cn(...inputs: ClassValue[]) {
 interface CardProps {
   children: ReactNode;
   className?: string;
+  onClick?: () => void;
 }
 
-export const Card = ({ children, className }: CardProps) => (
-  <div className={cn("glass-card rounded-2xl p-6", className)}>
+export const Card = ({ children, className, onClick }: CardProps) => (
+  <div className={cn("glass-card rounded-2xl p-6", className)} onClick={onClick}>
     {children}
   </div>
 );
