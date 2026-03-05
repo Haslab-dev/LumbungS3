@@ -13,6 +13,9 @@ The name **“Lumbung”** refers to the traditional Indonesian rice storage hou
 - **Drizzle ORM**: Type-safe database interactions with SQLite.
 - **Multipart Uploads**: High-performance chunked uploads for large files.
 - **Virtual Folders**: Navigate objects using S3-style directory prefixes.
+- **Object Versioning**: Keep multiple versions with delete markers and rollback.
+- **Lifecycle Rules**: Automatically expire objects and noncurrent versions.
+- **Object Metadata & Tags**: Attach key-value metadata and up to 10 tags per object.
 - **Presigned URLs**: Secure temporary access for private objects.
 - **Live Metrics**: Real-time throughput and storage monitoring.
 
@@ -35,7 +38,7 @@ bun install
 LumbungS3 uses Drizzle ORM. Initialize your database schema with:
 
 ```bash
-bunx drizzle-kit push
+bun run db:push
 ```
 
 ### Development
@@ -56,11 +59,8 @@ We provide a formal test suite to verify S3 compatibility and core functionality
 **Ensure the server is running (`bun dev`) before executing tests:**
 
 ```bash
-# Run the formal test suite
+# Run all tests (Phase 1 + Phase 2)
 bun test
-
-# Run the detailed multipart integration script
-bun run scripts/test_upload.ts
 ```
 
 ## 🛠 Tech Stack
@@ -81,12 +81,11 @@ bun run scripts/test_upload.ts
 - [x] Presigned URLs for secure access
 - [x] Folder Navigation & Breadcrumbs
 
-### Phase 2: Platform
+### Phase 2: Platform (Completed)
 
-- [ ] **Object Versioning**: Keep multiple versions of the same file.
-- [ ] **Lifecycle Rules**: Automatically transition or delete old data.
-- [ ] **IAM-Lite**: Basic access policies and multiple credential sets.
-- [ ] **Object Metadata & Tags**: Extended categorization for files.
+- [x] **Object Versioning**: Multiple versions, delete markers, version-specific downloads & deletes.
+- [x] **Lifecycle Rules**: Auto-expire objects and noncurrent versions after N days.
+- [x] **Object Metadata & Tags**: Key-value metadata CRUD and up to 10 tags per object.
 
 ### Phase 3: Distributed
 

@@ -39,5 +39,20 @@ export const bucketRoutes = (db: DatabaseType) => {
     return c.json({ status: 'updated', visibility });
   });
 
+  // Toggle versioning
+  app.patch('/:id/versioning', async (c) => {
+    const id = c.req.param('id');
+    const { versioning } = await c.req.json();
+    if (!['enabled', 'disabled', 'suspended'].includes(versioning)) {
+      return c.json({ error: 'Invalid versioning state. Must be: enabled, disabled, or suspended' }, 400);
+    }
+
+    await db.update(buckets)
+      .set({ versioning })
+      .where(eq(buckets.id, id));
+      
+    return c.json({ status: 'updated', versioning });
+  });
+
   return app;
 };

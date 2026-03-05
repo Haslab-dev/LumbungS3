@@ -6,6 +6,7 @@ export const buckets = sqliteTable("buckets", {
   name: text("name").notNull().unique(),
   createdAt: text("created_at").default(sql`(CURRENT_TIMESTAMP)`),
   visibility: text("visibility").default("private"),
+  versioning: text("versioning").default("disabled"), // disabled | enabled | suspended
 });
 
 export const objects = sqliteTable("objects", {
@@ -16,10 +17,42 @@ export const objects = sqliteTable("objects", {
   contentType: text("content_type"),
   etag: text("etag"),
   hash: text("hash").notNull(),
+  versionId: text("version_id"), // null = current version (non-versioned bucket)
+  isLatest: integer("is_latest", { mode: "boolean" }).default(true),
+  isDeleteMarker: integer("is_delete_marker", { mode: "boolean" }).default(false),
   createdAt: text("created_at").default(sql`(CURRENT_TIMESTAMP)`),
 }, (t) => ({
-  unq: unique().on(t.bucketId, t.key),
+  unq: unique().on(t.bucketId, t.key, t.versionId),
 }));
+
+export const objectMetadata = sqliteTable("object_metadata", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  objectId: text("object_id").notNull().references(() => objects.id, { onDelete: 'cascade' }),
+  metaKey: text("meta_key").notNull(),
+  metaValue: text("meta_value").notNull(),
+}, (t) => ({
+  unq: unique().on(t.objectId, t.metaKey),
+}));
+
+export const objectTags = sqliteTable("object_tags", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  objectId: text("object_id").notNull().references(() => objects.id, { onDelete: 'cascade' }),
+  tagKey: text("tag_key").notNull(),
+  tagValue: text("tag_value").notNull(),
+}, (t) => ({
+  unq: unique().on(t.objectId, t.tagKey),
+}));
+
+export const lifecycleRules = sqliteTable("lifecycle_rules", {
+  id: text("id").primaryKey(),
+  bucketId: text("bucket_id").notNull().references(() => buckets.id, { onDelete: 'cascade' }),
+  name: text("name").notNull(),
+  prefix: text("prefix").default(""),              // Apply to objects matching this prefix
+  status: text("status").default("enabled"),        // enabled | disabled
+  expirationDays: integer("expiration_days"),       // Delete objects after N days
+  noncurrentExpirationDays: integer("noncurrent_expiration_days"), // Delete old versions after N days
+  createdAt: text("created_at").default(sql`(CURRENT_TIMESTAMP)`),
+});
 
 export const accessKeys = sqliteTable("access_keys", {
   id: text("id").primaryKey(),

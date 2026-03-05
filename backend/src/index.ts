@@ -4,6 +4,7 @@ import { initDb } from './lib/db';
 import { bucketRoutes } from './features/buckets/bucket.controller';
 import { objectRoutes } from './features/objects/object.controller';
 import { accessKeyRoutes } from './features/security/accessKey.controller';
+import { lifecycleRoutes, evaluateLifecycleRules } from './features/lifecycle/lifecycle.controller';
 import { buckets, objects } from './db/schema';
 import { sql } from 'drizzle-orm';
 
@@ -65,6 +66,14 @@ app.get('/api/metrics', async (c) => {
 // Feature Routes
 app.route('/api/buckets', bucketRoutes(db));
 app.route('/api/keys', accessKeyRoutes(db));
+
+// On-demand lifecycle evaluation (must be before the subrouter)
+app.post('/api/lifecycle/evaluate', async (c) => {
+  const result = await evaluateLifecycleRules(db);
+  return c.json(result);
+});
+
+app.route('/api/lifecycle', lifecycleRoutes(db));
 app.route('/objects', objectRoutes(db));
 
 app.get('/health', (c) => c.json({ status: 'ok' }));
