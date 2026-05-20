@@ -14,6 +14,7 @@ export function DashboardOverview({ onSelectBucket, viewMode = 'overview' }: Das
   const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newBucketName, setNewBucketName] = useState('');
+  const [createBucketError, setCreateBucketError] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   const { data: buckets = [], isLoading: bucketsLoading } = useQuery({
@@ -28,11 +29,24 @@ export function DashboardOverview({ onSelectBucket, viewMode = 'overview' }: Das
 
   const createBucketMutation = useMutation({
     mutationFn: createBucket,
+    onMutate: () => {
+      setCreateBucketError(null);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['buckets'] });
       queryClient.invalidateQueries({ queryKey: ['metrics'] });
       setIsModalOpen(false);
       setNewBucketName('');
+      setCreateBucketError(null);
+    },
+    onError: (error: any) => {
+      const status = error?.response?.status;
+      const message = error?.response?.data?.error || error?.response?.data?.message;
+      if (status === 409) {
+        setCreateBucketError(message || 'Bucket name already exists');
+        return;
+      }
+      setCreateBucketError(message || 'Failed to create bucket');
     }
   });
 
@@ -245,6 +259,11 @@ export function DashboardOverview({ onSelectBucket, viewMode = 'overview' }: Das
         title="Create New Bucket"
       >
         <form onSubmit={handleCreateBucket} className="space-y-4">
+          {createBucketError && (
+            <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
+              {createBucketError}
+            </div>
+          )}
           <div className="space-y-2">
             <label className="text-sm text-slate-400 ml-1">Bucket Name</label>
             <input
@@ -257,11 +276,11 @@ export function DashboardOverview({ onSelectBucket, viewMode = 'overview' }: Das
             />
             <p className="text-[10px] text-slate-500 px-1">Lower case, numbers, dots and hyphens only.</p>
           </div>
-          <button 
-            type="submit" 
-            disabled={!newBucketName || createBucketMutation.isPending}
-            className="btn-primary w-full justify-center mt-2 h-12"
-          >
+            <button 
+              type="submit" 
+              disabled={!newBucketName || createBucketMutation.isPending}
+              className="btn-primary w-full justify-center mt-2 h-12"
+            >
             {createBucketMutation.isPending ? <Loader2 className="animate-spin" /> : 'Create Bucket'}
           </button>
         </form>

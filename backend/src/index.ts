@@ -28,6 +28,8 @@ import { objectRoutes } from './features/objects/object.controller';
 import { accessKeyRoutes } from './features/security/accessKey.controller';
 import { lifecycleRoutes, evaluateLifecycleRules } from './features/lifecycle/lifecycle.controller';
 import { shareRoutes } from './features/shares/share.controller';
+import { authRoutes } from './features/auth/auth.controller';
+import { adminAuth } from './lib/auth';
 import { buckets, objects } from './db/schema';
 import { sql } from 'drizzle-orm';
 
@@ -61,6 +63,8 @@ export type HonoEnv = {
     storage: StorageProvider;
   };
   Bindings: {
+    ADMIN_USERNAME?: string;
+    ADMIN_PASSWORD?: string;
     TURSO_CONNECTION_URL?: string;
     TURSO_DATABASE_URL?: string;
     TURSO_AUTH_TOKEN?: string;
@@ -85,12 +89,15 @@ app.onError((err, c) => {
   }, 500);
 });
 
-const startTime = Date.now();
+let startTime: number | null = null;
 
 app.use('/*', cors());
 
 // Dynamic Context Injection Middleware
 app.use('/*', async (c, next) => {
+  if (startTime === null) {
+    startTime = Date.now();
+  }
   const dbInstance = initDb(c.env);
   const storageInstance = getStorage(c.env);
   c.set('db', dbInstance);
@@ -99,7 +106,7 @@ app.use('/*', async (c, next) => {
 });
 
 // Metrics API
-app.get('/api/metrics', async (c) => {
+app.get('/api/metrics', adminAuth(), async (c) => {
   try {
     const db = c.get('db');
     const bucketCountData = await db.select({ total: sql<number>`count(*)` }).from(buckets);
@@ -120,7 +127,7 @@ app.get('/api/metrics', async (c) => {
       ? (totalSizeBytes / (1024 ** 2)).toFixed(2) + ' MB'
       : totalSizeGB.toFixed(2) + ' GB';
 
-    const seconds = (Date.now() - startTime) / 1000;
+    const seconds = (Date.now() - (startTime || Date.now())) / 1000;
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
     const s = Math.floor(seconds % 60);
@@ -146,6 +153,22 @@ app.get('/api/metrics', async (c) => {
     console.error('Metrics Error:', err);
     return c.json({ error: 'Internal Error' }, 500);
   }
+});
+
+// Authentication & Session Routes
+app.route('/api/auth', authRoutes());
+
+// Global API Route Protection Middleware
+app.use('/api/buckets/*', adminAuth());
+app.use('/api/keys/*', adminAuth());
+app.use('/api/lifecycle/*', adminAuth());
+app.use('/api/metrics', adminAuth());
+app.use('/api/shares/*', async (c, next) => {
+  // Allow public share links to fetch metadata without auth
+  if (c.req.path.startsWith('/api/shares/public/')) {
+    return await next();
+  }
+  return adminAuth()(c, next);
 });
 
 // Feature Routes (Configured with dynamic database context)

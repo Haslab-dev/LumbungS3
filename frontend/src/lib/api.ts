@@ -7,6 +7,39 @@ const api = axios.create({
   baseURL: `${BASE_URL}/api`,
 });
 
+// Configure Request & Response Interceptors for Auth
+const setupAuthInterceptors = (instance: any) => {
+  instance.interceptors.request.use((config: any) => {
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('lumbungs3_token');
+      if (token) {
+        config.headers = config.headers || {};
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    }
+    return config;
+  }, (error: any) => Promise.reject(error));
+
+  instance.interceptors.response.use(
+    (response: any) => response,
+    (error: any) => {
+      if (error.response && error.response.status === 401) {
+        if (typeof window !== 'undefined') {
+          const isSharePath = window.location.pathname.startsWith('/share/');
+          if (!isSharePath && localStorage.getItem('lumbungs3_token')) {
+            localStorage.removeItem('lumbungs3_token');
+            window.location.reload();
+          }
+        }
+      }
+      return Promise.reject(error);
+    }
+  );
+};
+
+setupAuthInterceptors(api);
+setupAuthInterceptors(axios);
+
 // Buckets
 export const getBuckets = async () => {
   const response = await api.get('/buckets');
@@ -113,6 +146,33 @@ export const getPublicShare = async (id: string) => {
 // Metrics
 export const getMetrics = async () => {
   const response = await api.get('/metrics');
+  return response.data;
+};
+
+// CORS Settings
+export const getCorsRules = async () => {
+  const response = await api.get('/keys/cors');
+  return response.data;
+};
+
+export const getCorsRuleForBucket = async (bucketId: string) => {
+  const response = await api.get(`/keys/cors/bucket/${bucketId}`);
+  return response.data;
+};
+
+export const saveCorsRule = async (data: {
+  bucketId: string;
+  allowedOrigins: string;
+  allowedMethods: string;
+  allowedHeaders?: string;
+  maxAge?: number;
+}) => {
+  const response = await api.post('/keys/cors', data);
+  return response.data;
+};
+
+export const deleteCorsRule = async (id: string) => {
+  const response = await api.delete(`/keys/cors/${id}`);
   return response.data;
 };
 

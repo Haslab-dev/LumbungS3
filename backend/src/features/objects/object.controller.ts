@@ -4,12 +4,13 @@ import { signUrl, verifyUrl } from '../../lib/signer';
 import { buckets, objects, multipartUploads, uploadParts, objectMetadata, objectTags } from '../../db/schema';
 import type { HonoEnv } from '../../index';
 import { sha256 } from '../../lib/hash';
+import { adminAuth } from '../../lib/auth';
 
 export const objectRoutes = () => {
   const app = new Hono<HonoEnv>();
 
   // List objects in a bucket (with prefix/folder support)
-  app.get('/:bucketName', async (c) => {
+  app.get('/:bucketName', adminAuth(), async (c) => {
     const db = c.get('db');
     const bucketName = c.req.param('bucketName');
     const prefix = c.req.query('prefix') || '';
@@ -39,7 +40,7 @@ export const objectRoutes = () => {
   });
 
   // Generate Presigned URL
-  app.post('/:bucketName/:key{.+}/presign', async (c) => {
+  app.post('/:bucketName/:key{.+}/presign', adminAuth(), async (c) => {
     const db = c.get('db');
     const bucketName = c.req.param('bucketName');
     const key = c.req.param('key');
@@ -67,7 +68,7 @@ export const objectRoutes = () => {
   });
 
   // === Object Metadata ===
-  app.get('/:bucketName/:key{.+}/metadata', async (c) => {
+  app.get('/:bucketName/:key{.+}/metadata', adminAuth(), async (c) => {
     const db = c.get('db');
     const bucketName = c.req.param('bucketName');
     const key = c.req.param('key');
@@ -87,7 +88,7 @@ export const objectRoutes = () => {
     return c.json(result);
   });
 
-  app.put('/:bucketName/:key{.+}/metadata', async (c) => {
+  app.put('/:bucketName/:key{.+}/metadata', adminAuth(), async (c) => {
     const db = c.get('db');
     const bucketName = c.req.param('bucketName');
     const key = c.req.param('key');
@@ -116,7 +117,7 @@ export const objectRoutes = () => {
   });
 
   // === Object Tags ===
-  app.get('/:bucketName/:key{.+}/tagging', async (c) => {
+  app.get('/:bucketName/:key{.+}/tagging', adminAuth(), async (c) => {
     const db = c.get('db');
     const bucketName = c.req.param('bucketName');
     const key = c.req.param('key');
@@ -136,7 +137,7 @@ export const objectRoutes = () => {
     return c.json(result);
   });
 
-  app.put('/:bucketName/:key{.+}/tagging', async (c) => {
+  app.put('/:bucketName/:key{.+}/tagging', adminAuth(), async (c) => {
     const db = c.get('db');
     const bucketName = c.req.param('bucketName');
     const key = c.req.param('key');
@@ -166,7 +167,7 @@ export const objectRoutes = () => {
     return c.json({ status: 'updated', tags: body });
   });
 
-  app.delete('/:bucketName/:key{.+}/tagging', async (c) => {
+  app.delete('/:bucketName/:key{.+}/tagging', adminAuth(), async (c) => {
     const db = c.get('db');
     const bucketName = c.req.param('bucketName');
     const key = c.req.param('key');
@@ -184,7 +185,7 @@ export const objectRoutes = () => {
   });
 
   // === Object Versions ===
-  app.get('/:bucketName/:key{.+}/versions', async (c) => {
+  app.get('/:bucketName/:key{.+}/versions', adminAuth(), async (c) => {
     const db = c.get('db');
     const bucketName = c.req.param('bucketName');
     const key = c.req.param('key');
@@ -212,7 +213,7 @@ export const objectRoutes = () => {
   });
 
   // Multipart - Initiate & Complete (Shared POST route)
-  app.post('/:bucketName/:key{.+|[^/]+}', async (c) => {
+  app.post('/:bucketName/:key{.+|[^/]+}', adminAuth(), async (c) => {
     const db = c.get('db');
     const storage = c.get('storage');
     const bucketName = c.req.param('bucketName');
@@ -290,7 +291,7 @@ export const objectRoutes = () => {
   });
 
   // Upload object (Single Part) & Upload Part (Shared PUT route)
-  app.put('/:bucketName/:key{.+|[^/]+}', async (c) => {
+  app.put('/:bucketName/:key{.+|[^/]+}', adminAuth(), async (c) => {
     const db = c.get('db');
     const storage = c.get('storage');
     const bucketName = c.req.param('bucketName');
@@ -416,13 +417,28 @@ export const objectRoutes = () => {
       if (ext && mimeMap[ext]) contentType = mimeMap[ext];
     }
 
+    const acceptHeader = c.req.header('accept') || '';
+    const isBrowserNavigate = acceptHeader.includes('text/html');
+    
+    // Redirect browser navigations to the beautiful SPA viewer unless they explicitly want raw bytes
+    if (isBrowserNavigate && c.req.query('raw') !== 'true') {
+      const searchParams = new URLSearchParams();
+      if (c.req.query('expires')) searchParams.set('expires', c.req.query('expires')!);
+      if (c.req.query('signature')) searchParams.set('signature', c.req.query('signature')!);
+      
+      const qs = searchParams.toString();
+      const redirectUrl = `/view/${bucketName}/${key}${qs ? '?' + qs : ''}`;
+      return c.redirect(redirectUrl, 302);
+    }
+
     const viewableTypes = ['image/', 'video/', 'audio/', 'application/pdf', 'text/'];
     const isMedia = viewableTypes.some(t => contentType.startsWith(t));
     const disposition = (c.req.query('view') === 'true' || isMedia) ? 'inline' : `attachment; filename="${key.split('/').pop()}"`;
 
     const headers: Record<string, string> = {
       'Content-Type': contentType,
-      'Content-Disposition': disposition
+      'Content-Disposition': disposition,
+      'Content-Length': object.size.toString()
     };
     if (object.versionId) headers['x-amz-version-id'] = object.versionId;
 
@@ -430,7 +446,7 @@ export const objectRoutes = () => {
   });
 
   // Delete object & Abort Multipart (Shared DELETE route)
-  app.delete('/:bucketName/:key{.+|[^/]+}', async (c) => {
+  app.delete('/:bucketName/:key{.+|[^/]+}', adminAuth(), async (c) => {
     const db = c.get('db');
     const storage = c.get('storage');
     const bucketName = c.req.param('bucketName');

@@ -40,10 +40,11 @@ export function SharedLinksManager() {
     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500 pb-20">
       <div>
         <h2 className="text-3xl font-bold tracking-tight text-white mb-1">Shared Links</h2>
-        <p className="text-slate-400">View and manage all active file sharing links generated for your storage nodes.</p>
+        <p className="text-slate-400 text-sm">View and manage all active file sharing links generated for your storage nodes.</p>
       </div>
 
-      <Card className="p-0 overflow-hidden border-slate-700/30 bg-slate-900/30">
+      {/* Desktop Table View (Hidden on mobile) */}
+      <Card className="p-0 overflow-hidden border-slate-700/30 bg-slate-900/30 hidden md:block">
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>
@@ -101,7 +102,7 @@ export function SharedLinksManager() {
                       <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
                           onClick={() => handleCopy(share.id)}
-                          className={`p-2 rounded-lg transition-all border ${
+                          className={`p-2 rounded-lg transition-all border cursor-pointer ${
                             copiedId === share.id
                               ? 'bg-emerald-500/25 text-emerald-400 border-emerald-500/30'
                               : 'hover:bg-slate-700 text-slate-400 hover:text-white border-transparent'
@@ -113,7 +114,7 @@ export function SharedLinksManager() {
                         <button
                           onClick={() => revokeMutation.mutate(share.id)}
                           disabled={revokeMutation.isPending && revokeMutation.variables === share.id}
-                          className="p-2 hover:bg-rose-500/20 rounded-lg text-slate-500 hover:text-rose-400 transition-all border border-transparent hover:border-rose-500/30"
+                          className="p-2 hover:bg-rose-500/20 rounded-lg text-slate-500 hover:text-rose-400 transition-all border border-transparent hover:border-rose-500/30 cursor-pointer"
                           title="Revoke Shareable Link"
                         >
                           {revokeMutation.isPending && revokeMutation.variables === share.id ? (
@@ -145,6 +146,87 @@ export function SharedLinksManager() {
           </table>
         </div>
       </Card>
+
+      {/* Mobile Card List View (Visible only on mobile/tablet) */}
+      <div className="grid grid-cols-1 gap-4 md:hidden">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="animate-spin text-indigo-500" size={32} />
+          </div>
+        ) : shares.length > 0 ? (
+          shares.map((share: any) => (
+            <Card key={share.id} className="p-5 border-slate-700/40 space-y-4">
+              <div className="flex justify-between items-start gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center border bg-slate-850 text-indigo-400 border-slate-700 shrink-0">
+                    <File size={16} />
+                  </div>
+                  <span className="text-sm font-semibold text-white truncate" title={share.key}>
+                    {share.key.split('/').pop()}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    onClick={() => handleCopy(share.id)}
+                    className={`p-2 rounded-lg transition-all border cursor-pointer ${
+                      copiedId === share.id
+                        ? 'bg-emerald-500/25 text-emerald-400 border-emerald-500/30'
+                        : 'hover:bg-slate-700 text-slate-400 hover:text-white border-transparent bg-slate-800'
+                    }`}
+                  >
+                    {copiedId === share.id ? <Check size={14} /> : <Link2 size={14} />}
+                  </button>
+                  <button
+                    onClick={() => revokeMutation.mutate(share.id)}
+                    disabled={revokeMutation.isPending && revokeMutation.variables === share.id}
+                    className="p-2 bg-slate-800 hover:bg-rose-500/20 rounded-lg text-slate-400 hover:text-rose-400 transition-all border border-transparent hover:border-rose-500/30 cursor-pointer"
+                  >
+                    {revokeMutation.isPending && revokeMutation.variables === share.id ? (
+                      <Loader2 className="animate-spin" size={14} />
+                    ) : (
+                      <Trash2 size={14} />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-y-3 gap-x-2 text-xs pt-3 border-t border-slate-800/60">
+                <div>
+                  <p className="text-[10px] text-slate-500 uppercase font-bold">Size</p>
+                  <p className="text-slate-300 font-mono mt-0.5">{formatSize(share.size)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-slate-500 uppercase font-bold">Bucket</p>
+                  <span className="inline-block text-[9px] bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border border-indigo-500/20 mt-0.5">
+                    {share.bucketName}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-[10px] text-slate-500 uppercase font-bold">Expires At</p>
+                  {share.expiresAt ? (
+                    <span className="flex items-center gap-1 text-[10px] text-amber-400 mt-0.5">
+                      <Clock size={11} />
+                      {new Date(share.expiresAt).toLocaleDateString()}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-emerald-400 font-medium mt-0.5 block">Never</span>
+                  )}
+                </div>
+                <div>
+                  <p className="text-[10px] text-slate-500 uppercase font-bold">Created</p>
+                  <p className="text-slate-400 mt-0.5">{new Date(share.createdAt).toLocaleDateString()}</p>
+                </div>
+              </div>
+            </Card>
+          ))
+        ) : (
+          <div className="text-center py-12 glass-card rounded-2xl border-dashed border-2 border-slate-700">
+            <ShieldAlert size={36} className="mx-auto text-slate-600 mb-2" />
+            <h4 className="text-sm font-semibold text-slate-300">No Shared Links</h4>
+            <p className="text-xs text-slate-500 mt-1">Shared files will appear here.</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

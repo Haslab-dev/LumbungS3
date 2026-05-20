@@ -4,51 +4,43 @@ import {
   ImageIcon, 
   Video, 
   Music, 
-  FileText,
+  FileText, 
   Download, 
   Loader2, 
-  ShieldAlert, 
-  Clock, 
   Database,
-  ArrowRight,
   Lock
 } from 'lucide-react';
-import { getPublicShare } from '../../lib/api';
+import axios from 'axios';
 
-interface PublicShareViewProps {
-  shareId: string;
+interface DirectObjectViewProps {
+  bucketName: string;
+  objectKey: string;
 }
 
-export function PublicShareView({ shareId }: PublicShareViewProps) {
+export function DirectObjectView({ bucketName, objectKey }: DirectObjectViewProps) {
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [isExpired, setIsExpired] = useState(false);
-  const [fileData, setFileData] = useState<any>(null);
+  const [fileData, setFileData] = useState<{ size: number; contentType: string } | null>(null);
+
+  // Preserve any authentication/presigned query parameters that were on the URL
+  const searchParams = new URLSearchParams(window.location.search);
+  searchParams.set('raw', 'true'); // Ensure we don't cause an infinite redirect loop
+  const rawDownloadUrl = `${window.location.origin}/objects/${bucketName}/${objectKey}?${searchParams.toString()}`;
 
   useEffect(() => {
-    setLoading(true);
-    setError(null);
-    setIsExpired(false);
-    
-    getPublicShare(shareId)
-      .then((data) => {
-        setFileData(data);
+    // Perform a HEAD request to fetch the object metadata (size and content-type)
+    axios.head(rawDownloadUrl)
+      .then((res) => {
+        setFileData({
+          size: parseInt(res.headers['content-length'] || '0', 10),
+          contentType: res.headers['content-type'] || 'application/octet-stream',
+        });
         setLoading(false);
       })
       .catch((err) => {
-        console.error('Failed to load shared file:', err);
-        const status = err.response?.status;
-        if (status === 410) {
-          setIsExpired(true);
-          setError('This share link has expired.');
-        } else if (status === 404) {
-          setError('This share link was not found or has been revoked.');
-        } else {
-          setError(err.response?.data?.error || 'Failed to load the shared file. Please try again.');
-        }
+        console.error('Failed to load object metadata:', err);
         setLoading(false);
       });
-  }, [shareId]);
+  }, [rawDownloadUrl]);
 
   const formatSize = (bytes: number) => {
     if (bytes === 0) return '0 B';
@@ -81,26 +73,24 @@ export function PublicShareView({ shareId }: PublicShareViewProps) {
     if (!fileData) return null;
 
     let activeContentType = fileData.contentType;
-    if (activeContentType === 'application/octet-stream') {
-      const ext = fileData.key.split('.').pop()?.toLowerCase();
+    const ext = objectKey.split('.').pop()?.toLowerCase();
+
+    if (activeContentType === 'application/octet-stream' && ext) {
       const mimeMap: Record<string, string> = {
         'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'gif': 'image/gif', 'webp': 'image/webp',
         'mp4': 'video/mp4', 'webm': 'video/webm', 'mp3': 'audio/mpeg', 'wav': 'audio/wav',
         'pdf': 'application/pdf', 'txt': 'text/plain'
       };
-      if (ext && mimeMap[ext]) activeContentType = mimeMap[ext];
+      if (mimeMap[ext]) activeContentType = mimeMap[ext];
     }
-
-    // Since our backend endpoint creates a fully signed temporary URL including signature
-    const previewUrl = fileData.downloadUrl;
 
     if (activeContentType.startsWith('image/')) {
       return (
-        <div className="flex items-center justify-center p-4 bg-slate-950/40 rounded-2xl border border-slate-800/80 overflow-hidden max-h-[500px]">
+        <div className="flex items-center justify-center p-4 w-full h-full bg-transparent overflow-hidden">
           <img 
-            src={previewUrl} 
-            alt={fileData.key} 
-            className="max-h-[460px] w-auto rounded-xl object-contain shadow-2xl hover:scale-[1.01] transition-transform duration-300"
+            src={rawDownloadUrl} 
+            alt={objectKey} 
+            className="max-h-full max-w-full w-auto object-contain shadow-2xl hover:scale-[1.01] transition-transform duration-300"
           />
         </div>
       );
@@ -108,9 +98,9 @@ export function PublicShareView({ shareId }: PublicShareViewProps) {
     
     if (activeContentType.startsWith('video/')) {
       return (
-        <div className="flex items-center justify-center bg-slate-950/40 rounded-2xl border border-slate-800/80 overflow-hidden max-h-[500px] w-full">
-          <video controls className="max-h-[460px] w-full rounded-xl shadow-2xl" autoPlay muted={false}>
-            <source src={previewUrl} type={activeContentType} />
+        <div className="flex items-center justify-center w-full h-full bg-black overflow-hidden">
+          <video controls className="max-h-full max-w-full w-full shadow-2xl" autoPlay>
+            <source src={rawDownloadUrl} type={activeContentType} />
             Your browser does not support the video tag.
           </video>
         </div>
@@ -119,12 +109,12 @@ export function PublicShareView({ shareId }: PublicShareViewProps) {
 
     if (activeContentType.startsWith('audio/')) {
       return (
-        <div className="flex flex-col items-center justify-center py-12 px-6 bg-slate-950/30 rounded-2xl border border-slate-800/80">
-          <div className="w-16 h-16 bg-emerald-500/10 text-emerald-400 rounded-full flex items-center justify-center mb-4 border border-emerald-500/20 shadow-lg shadow-emerald-500/5">
-            <Music size={32} />
+        <div className="flex flex-col items-center justify-center w-full h-full">
+          <div className="w-24 h-24 bg-emerald-500/10 text-emerald-400 rounded-full flex items-center justify-center mb-8 border border-emerald-500/20 shadow-lg shadow-emerald-500/5 pulse">
+            <Music size={48} />
           </div>
-          <audio controls className="w-full max-w-md">
-            <source src={previewUrl} type={activeContentType} />
+          <audio controls className="w-full max-w-xl">
+            <source src={rawDownloadUrl} type={activeContentType} />
             Your browser does not support the audio tag.
           </audio>
         </div>
@@ -133,9 +123,9 @@ export function PublicShareView({ shareId }: PublicShareViewProps) {
 
     if (activeContentType === 'application/pdf') {
       return (
-        <div className="w-full h-[600px] rounded-2xl overflow-hidden border border-slate-800 bg-slate-900 shadow-2xl relative">
+        <div className="w-full h-full bg-slate-900 relative">
           <iframe 
-            src={`${previewUrl}#toolbar=0`} 
+            src={`${rawDownloadUrl}#toolbar=0`} 
             className="w-full h-full border-none relative z-10" 
             title="PDF Preview" 
           />
@@ -143,20 +133,18 @@ export function PublicShareView({ shareId }: PublicShareViewProps) {
       );
     }
 
-    const ext = fileData.key.split('.').pop()?.toLowerCase();
     const isOffice = ext && ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'].includes(ext);
-    
     if (isOffice) {
       const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
       
       if (isLocalhost) {
         return (
-          <div className="flex flex-col items-center justify-center py-12 md:py-16 bg-slate-900/80 rounded-2xl border border-slate-800 p-6 text-center max-w-xl mx-auto backdrop-blur-md shadow-2xl">
+          <div className="flex flex-col items-center justify-center w-full h-full p-6 text-center">
             <div className="w-16 h-16 md:w-20 md:h-20 bg-amber-500/10 text-amber-500 rounded-full flex items-center justify-center mb-6 border border-amber-500/20 shadow-lg shadow-amber-500/10">
               <FileText size={32} />
             </div>
             <h4 className="text-white font-bold text-lg mb-2">💻 Local Dev Preview Mode</h4>
-            <p className="text-slate-400 text-xs leading-relaxed mb-6">
+            <p className="text-slate-400 text-xs leading-relaxed mb-6 max-w-md">
               Microsoft Office Web Viewer requires a publicly accessible internet URL to render this file. 
               <br />
               <span className="text-slate-500 italic mt-1.5 block font-medium">When deployed in production, this Word/Excel document will load and render automatically!</span>
@@ -165,27 +153,26 @@ export function PublicShareView({ shareId }: PublicShareViewProps) {
         );
       }
       
-      const officeUrl = `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(previewUrl)}`;
+      const officeUrl = `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(rawDownloadUrl)}`;
       return (
-        <div className="w-full h-[600px] rounded-2xl overflow-hidden border border-slate-800 bg-slate-950 shadow-2xl relative">
+        <div className="w-full h-full bg-slate-950 relative">
           <iframe 
             src={officeUrl} 
-            className="w-full h-full border-none relative z-10" 
+            className="w-full h-full border-none relative z-10 bg-white" 
             title="Office Document Preview" 
           />
         </div>
       );
     }
 
-    // Default file icon preview fallback
     return (
-      <div className="flex flex-col items-center justify-center py-16 px-6 bg-slate-950/20 rounded-2xl border border-slate-850 border-dashed">
-        <div className="w-20 h-20 bg-slate-800/50 text-slate-400 rounded-2xl flex items-center justify-center mb-4 border border-slate-700/50">
+      <div className="flex flex-col items-center justify-center w-full h-full p-6">
+        <div className="w-20 h-20 bg-slate-800/50 text-slate-400 rounded-2xl flex items-center justify-center mb-6 border border-slate-700/50">
           <FileIcon size={40} className="text-slate-500" />
         </div>
-        <h4 className="text-white font-semibold mb-1 text-sm">Preview not available</h4>
-        <p className="text-slate-500 text-xs text-center max-w-xs">
-          This {activeContentType || 'unknown'} file type cannot be previewed in the browser. You can still download the file below.
+        <h4 className="text-white font-semibold mb-2 text-lg">Preview not available</h4>
+        <p className="text-slate-500 text-sm text-center max-w-sm">
+          This {activeContentType || 'unknown'} file type cannot be previewed natively in the browser.
         </p>
       </div>
     );
@@ -197,55 +184,15 @@ export function PublicShareView({ shareId }: PublicShareViewProps) {
         <div className="text-center space-y-4">
           <Loader2 className="animate-spin text-indigo-500 mx-auto" size={48} />
           <div className="space-y-1">
-            <h3 className="text-lg font-bold text-white">Retrieving Shared File</h3>
-            <p className="text-slate-500 text-sm">Connecting securely and fetching file metadata...</p>
+            <h3 className="text-lg font-bold text-white">Opening Viewer</h3>
+            <p className="text-slate-500 text-sm">Fetching object metadata...</p>
           </div>
         </div>
       </div>
     );
   }
 
-  if (error || isExpired) {
-    return (
-      <div className="min-h-screen bg-surface-900 flex flex-col items-center justify-center p-4">
-        <div className="w-full max-w-md glass-card rounded-3xl p-8 border border-rose-500/20 shadow-2xl shadow-rose-950/10">
-          <div className="flex flex-col items-center text-center space-y-6">
-            <div className="p-4 bg-rose-500/10 rounded-2xl border border-rose-500/20 text-rose-400 shadow-inner">
-              <ShieldAlert size={48} className="animate-pulse" />
-            </div>
-            
-            <div className="space-y-2">
-              <h3 className="text-xl font-bold text-white">
-                {isExpired ? 'Share Link Expired' : 'Access Denied'}
-              </h3>
-              <p className="text-sm text-slate-400 leading-relaxed">
-                {error || 'This link is no longer valid, has been deleted, or may have expired.'}
-              </p>
-            </div>
-
-            <div className="w-full h-px bg-slate-800/80 my-2"></div>
-
-            <div className="space-y-3 w-full">
-              <div className="flex items-center gap-2 text-xs text-slate-500 bg-slate-900/40 p-3 rounded-xl border border-slate-800/80 text-left">
-                <Lock size={14} className="text-slate-600 shrink-0" />
-                <span>Links can expire based on custom rules set by the owner, or be revoked instantly at any time.</span>
-              </div>
-              
-              <a 
-                href="/"
-                className="w-full py-3 px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-sm rounded-xl transition-all flex items-center justify-center gap-2 border border-slate-700/50"
-              >
-                Go to LumbungS3
-                <ArrowRight size={16} />
-              </a>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  const fileName = fileData.key.split('/').pop();
+  const fileName = objectKey.split('/').pop() || 'Unknown File';
 
   return (
     <div className="h-screen w-full bg-slate-950 flex flex-col overflow-hidden font-sans">
@@ -262,7 +209,7 @@ export function PublicShareView({ shareId }: PublicShareViewProps) {
           
           <div className="flex items-center gap-3 min-w-0">
             <div className="p-2 bg-slate-800/50 rounded-lg border border-slate-700/30 shrink-0">
-              {fileData && getFileIcon(fileData.contentType, fileData.key)}
+              {fileData && getFileIcon(fileData.contentType, objectKey)}
             </div>
             <div className="flex flex-col min-w-0">
               <h1 className="text-sm font-semibold text-slate-200 truncate pr-4" title={decodeURIComponent(fileName)}>
@@ -273,21 +220,10 @@ export function PublicShareView({ shareId }: PublicShareViewProps) {
                   <span className="uppercase tracking-wider text-indigo-400/80">{fileData.contentType.split(';')[0]}</span>
                   <span className="w-1 h-1 bg-slate-700 rounded-full"></span>
                   <span>{formatSize(fileData.size)}</span>
-                  {fileData.expiresAt ? (
-                    <>
-                      <span className="w-1 h-1 bg-slate-700 rounded-full"></span>
-                      <span className="flex items-center gap-1 text-amber-500/80" title={`Expires: ${new Date(fileData.expiresAt).toLocaleString()}`}>
-                        <Clock size={10} /> Temp Share
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="w-1 h-1 bg-slate-700 rounded-full"></span>
-                      <span className="flex items-center gap-1 text-emerald-500/80">
-                        <Lock size={10} /> Secure Share
-                      </span>
-                    </>
-                  )}
+                  <span className="w-1 h-1 bg-slate-700 rounded-full"></span>
+                  <span className="flex items-center gap-1 text-emerald-500/80">
+                    <Lock size={10} /> Public
+                  </span>
                 </div>
               )}
             </div>
@@ -296,7 +232,7 @@ export function PublicShareView({ shareId }: PublicShareViewProps) {
 
         <div className="flex items-center gap-3 shrink-0">
           <a 
-            href={fileData.downloadUrl}
+            href={rawDownloadUrl}
             download={decodeURIComponent(fileName)}
             className="flex items-center justify-center gap-2 h-9 px-4 rounded-lg bg-indigo-500 hover:bg-indigo-400 text-white text-sm font-medium transition-all shadow-lg shadow-indigo-500/20 active:scale-95"
           >

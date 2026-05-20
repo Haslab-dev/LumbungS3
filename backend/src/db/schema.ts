@@ -1,9 +1,21 @@
 import { sqliteTable, text, integer, unique } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 
+export const users = sqliteTable("users", {
+  id: text("id").primaryKey(),
+  username: text("username").notNull().unique(),
+  email: text("email").notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
+  salt: text("salt").notNull(),
+  role: text("role").default("user"), // 'admin' | 'user'
+  status: text("status").default("active"), // 'active' | 'inactive'
+  createdAt: text("created_at").default(sql`(CURRENT_TIMESTAMP)`),
+});
+
 export const buckets = sqliteTable("buckets", {
   id: text("id").primaryKey(),
   name: text("name").notNull().unique(),
+  userId: text("user_id"), // null = owned by .env admin
   createdAt: text("created_at").default(sql`(CURRENT_TIMESTAMP)`),
   visibility: text("visibility").default("private"),
   versioning: text("versioning").default("disabled"), // disabled | enabled | suspended
@@ -56,6 +68,7 @@ export const lifecycleRules = sqliteTable("lifecycle_rules", {
 
 export const accessKeys = sqliteTable("access_keys", {
   id: text("id").primaryKey(),
+  userId: text("user_id"), // null = owned by .env admin
   accessKey: text("access_key").notNull().unique(),
   secretKey: text("secret_key").notNull(),
   status: text("status").default("active"),
@@ -90,4 +103,15 @@ export const shares = sqliteTable("shares", {
   createdAt: text("created_at").default(sql`(CURRENT_TIMESTAMP)`),
   expiresAt: text("expires_at"), // Optional ISO string or null (never expires)
 });
+
+export const corsRules = sqliteTable("cors_rules", {
+  id: text("id").primaryKey(),
+  bucketId: text("bucket_id").notNull().unique().references(() => buckets.id, { onDelete: 'cascade' }),
+  allowedOrigins: text("allowed_origins").notNull(), // comma-separated or json array
+  allowedMethods: text("allowed_methods").notNull(), // comma-separated or json array
+  allowedHeaders: text("allowed_headers").default("*"),
+  maxAge: integer("max_age").default(3600),
+  createdAt: text("created_at").default(sql`(CURRENT_TIMESTAMP)`),
+});
+
 

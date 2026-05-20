@@ -142,8 +142,8 @@ export function ObjectBrowser({ bucketName, onBack }: ObjectBrowserProps) {
         </div>
       </div>
 
-      <div className="flex flex-col md:flex-row gap-4 justify-between items-center bg-slate-800/20 p-4 rounded-2xl border border-slate-700/30">
-        <div className="flex items-center gap-3 bg-slate-900/50 px-4 py-2 rounded-xl border border-slate-700/50 w-full md:w-96">
+      <div className="flex flex-col md:flex-row gap-4 justify-between items-stretch md:items-center bg-slate-800/20 p-4 rounded-2xl border border-slate-700/30">
+        <div className="flex items-center gap-3 bg-slate-900/50 px-4 py-2.5 rounded-xl border border-slate-700/50 w-full md:w-96">
           <Search size={18} className="text-slate-500" />
           <input 
             type="text" 
@@ -154,17 +154,20 @@ export function ObjectBrowser({ bucketName, onBack }: ObjectBrowserProps) {
           />
         </div>
 
-        <div className="flex items-center gap-3 w-full md:w-auto">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
           <input 
             type="file" 
             className="hidden" 
             ref={fileInputRef} 
             onChange={handleFileUpload}
           />
-          <div className="flex items-center gap-3 flex-1 md:flex-none">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-1 md:flex-none">
             {uploadMutation.isPending && (
-              <div className="hidden md:flex flex-col items-end gap-1 w-32 mr-2">
-                <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">{uploadProgress}%</span>
+              <div className="flex flex-col gap-1 w-full sm:w-32 sm:mr-2">
+                <div className="flex justify-between sm:justify-end text-[10px] font-bold text-indigo-400 uppercase tracking-widest">
+                  <span className="sm:hidden">Uploading</span>
+                  <span>{uploadProgress}%</span>
+                </div>
                 <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
                   <div 
                     className="h-full bg-indigo-500 transition-all duration-300" 
@@ -174,7 +177,7 @@ export function ObjectBrowser({ bucketName, onBack }: ObjectBrowserProps) {
               </div>
             )}
             <button 
-              className="btn-secondary flex-1 md:flex-none"
+              className="btn-secondary w-full sm:w-auto justify-center cursor-pointer"
               onClick={() => fileInputRef.current?.click()}
               disabled={uploadMutation.isPending}
             >
@@ -182,14 +185,15 @@ export function ObjectBrowser({ bucketName, onBack }: ObjectBrowserProps) {
               {uploadMutation.isPending ? 'Uploading...' : 'Upload'}
             </button>
           </div>
-          <button className="btn-primary flex-1 md:flex-none">
+          <button className="btn-primary w-full sm:w-auto justify-center cursor-pointer">
             <Plus size={18} />
             Create Folder
           </button>
         </div>
       </div>
 
-      <Card className="p-0 overflow-hidden border-slate-700/30 bg-slate-900/30">
+      {/* Desktop Table View (Hidden on mobile) */}
+      <Card className="p-0 overflow-hidden border-slate-700/30 bg-slate-900/30 hidden md:block">
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>
@@ -237,7 +241,7 @@ export function ObjectBrowser({ bucketName, onBack }: ObjectBrowserProps) {
                         {item.type === 'file' ? (
                           <>
                             <button 
-                              className="p-2 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-all"
+                              className="p-2 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-all cursor-pointer"
                               onClick={(e) => { e.stopPropagation(); setPreviewObject(item); }}
                             >
                               <Eye size={16} />
@@ -246,14 +250,14 @@ export function ObjectBrowser({ bucketName, onBack }: ObjectBrowserProps) {
                               href={`${BASE_URL}/objects/${bucketName}/${item.key}`}
                               target="_blank"
                               rel="noreferrer"
-                              className="p-2 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-all"
+                              className="p-2 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-all cursor-pointer"
                               onClick={(e) => e.stopPropagation()}
                             >
                               <Download size={16} />
                             </a>
                             <button 
                               onClick={(e) => { e.stopPropagation(); deleteMutation.mutate(item.key); }}
-                              className="p-2 hover:bg-rose-500/20 rounded-lg text-slate-400 hover:text-rose-400 transition-all border border-transparent hover:border-rose-500/30"
+                              className="p-2 hover:bg-rose-500/20 rounded-lg text-slate-400 hover:text-rose-400 transition-all border border-transparent hover:border-rose-500/30 cursor-pointer"
                             >
                               <Trash2 size={16} />
                             </button>
@@ -276,6 +280,82 @@ export function ObjectBrowser({ bucketName, onBack }: ObjectBrowserProps) {
           </table>
         </div>
       </Card>
+
+      {/* Mobile Card List View (Visible only on mobile/tablet) */}
+      <div className="grid grid-cols-1 gap-4 md:hidden">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="animate-spin text-indigo-500" size={32} />
+          </div>
+        ) : processedItems.length > 0 ? (
+          processedItems.map((item: any) => (
+            <Card 
+              key={item.id} 
+              className="p-4 border-slate-700/40 hover:border-indigo-500/25 transition-all bg-slate-900/30 group cursor-pointer"
+              onClick={() => item.type === 'folder' ? navigateToFolder(item.key) : setPreviewObject(item)}
+            >
+              <div className="flex justify-between items-start gap-3">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all border shrink-0 ${
+                    item.type === 'folder' 
+                      ? 'bg-amber-500/10 text-amber-500 border-amber-500/20 shadow-lg shadow-amber-500/10' 
+                      : 'bg-slate-800 text-indigo-400 border-slate-700'
+                  }`}>
+                    {item.type === 'folder' ? <Folder size={16} fill="currentColor" fillOpacity={0.2} /> : <File size={16} />}
+                  </div>
+                  <span className="text-sm font-semibold text-white break-all" title={item.key}>
+                    {item.key}
+                  </span>
+                </div>
+
+                {item.type === 'file' && (
+                  <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <button 
+                      className="p-2 hover:bg-slate-750 bg-slate-800/80 rounded-lg text-slate-400 hover:text-white transition-all border border-slate-700/40 cursor-pointer"
+                      onClick={() => setPreviewObject(item)}
+                    >
+                      <Eye size={14} />
+                    </button>
+                    <a 
+                      href={`${BASE_URL}/objects/${bucketName}/${item.key}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="p-2 hover:bg-slate-750 bg-slate-800/80 rounded-lg text-slate-400 hover:text-white transition-all border border-slate-700/40 cursor-pointer"
+                    >
+                      <Download size={14} />
+                    </a>
+                    <button 
+                      onClick={() => deleteMutation.mutate(item.key)}
+                      className="p-2 bg-slate-800/80 hover:bg-rose-500/20 rounded-lg text-slate-400 hover:text-rose-400 transition-all border border-slate-700/40 hover:border-rose-500/30 cursor-pointer"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {item.type === 'file' && (
+                <div className="grid grid-cols-2 gap-y-2 gap-x-4 text-xs pt-3 mt-3 border-t border-slate-800/60">
+                  <div>
+                    <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Size</p>
+                    <p className="text-slate-300 font-mono mt-0.5">{formatSize(item.size)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Last Modified</p>
+                    <p className="text-slate-400 mt-0.5 font-medium">{new Date(item.createdAt).toLocaleString()}</p>
+                  </div>
+                </div>
+              )}
+            </Card>
+          ))
+        ) : (
+          <div className="text-center py-12 glass-card rounded-2xl border-dashed border-2 border-slate-700">
+            <Folder size={36} className="mx-auto text-slate-600 mb-2" />
+            <h4 className="text-sm font-semibold text-slate-300">No items found</h4>
+            <p className="text-xs text-slate-500 mt-1">This directory is empty.</p>
+          </div>
+        )}
+      </div>
 
       <FilePreview 
         isOpen={!!previewObject}
