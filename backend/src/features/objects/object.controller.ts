@@ -1,16 +1,16 @@
 import { Hono } from 'hono';
 import { eq, and, desc, asc } from 'drizzle-orm';
-import { join } from 'node:path';
-import { mkdirSync, unlinkSync, existsSync, readdirSync, readFileSync, appendFileSync, rmSync } from 'node:fs';
 import { signUrl, verifyUrl } from '../../lib/signer';
 import { buckets, objects, multipartUploads, uploadParts, objectMetadata, objectTags } from '../../db/schema';
-import type { DatabaseType } from '../../lib/db';
+import type { HonoEnv } from '../../index';
+import { sha256 } from '../../lib/hash';
 
-export const objectRoutes = (db: DatabaseType) => {
-  const app = new Hono();
+export const objectRoutes = () => {
+  const app = new Hono<HonoEnv>();
 
   // List objects in a bucket (with prefix/folder support)
   app.get('/:bucketName', async (c) => {
+    const db = c.get('db');
     const bucketName = c.req.param('bucketName');
     const prefix = c.req.query('prefix') || '';
     const versions = c.req.query('versions') === 'true';
@@ -20,12 +20,10 @@ export const objectRoutes = (db: DatabaseType) => {
 
     let query;
     if (versions) {
-      // Return all versions
       query = db.select().from(objects)
         .where(eq(objects.bucketId, bucket.id))
         .orderBy(desc(objects.createdAt));
     } else {
-      // Return only latest versions
       query = db.select().from(objects)
         .where(and(eq(objects.bucketId, bucket.id), eq(objects.isLatest, true)))
         .orderBy(desc(objects.createdAt));
@@ -33,7 +31,6 @@ export const objectRoutes = (db: DatabaseType) => {
 
     const allObjects = await query.execute();
     
-    // Filter by prefix and exclude delete markers from normal listing
     const filtered = allObjects
       .filter(obj => obj.key.startsWith(prefix))
       .filter(obj => versions || !obj.isDeleteMarker);
@@ -43,15 +40,20 @@ export const objectRoutes = (db: DatabaseType) => {
 
   // Generate Presigned URL
   app.post('/:bucketName/:key{.+}/presign', async (c) => {
+    const db = c.get('db');
     const bucketName = c.req.param('bucketName');
     const key = c.req.param('key');
     const { expires = 3600 } = await c.req.json().catch(() => ({}));
 
     const [bucket] = await db.select().from(buckets).where(eq(buckets.name, bucketName)).limit(1).execute();
     
+    // Resolve dynamic domain depending on development or Cloudflare host
+    const origin = new URL(c.req.url).origin;
+    const baseDomain = origin.includes('localhost') ? 'http://localhost:9000' : origin;
+
     if (bucket?.visibility === 'public') {
       return c.json({ 
-        url: `http://localhost:9000/objects/${bucketName}/${key}`,
+        url: `${baseDomain}/objects/${bucketName}/${key}`,
         expiresAt: null,
         isPublic: true
       });
@@ -59,13 +61,14 @@ export const objectRoutes = (db: DatabaseType) => {
 
     const expiresAt = Date.now() + (expires * 1000);
     const signature = await signUrl(bucketName, key, expiresAt);
-    const url = `http://localhost:9000/objects/${bucketName}/${key}?expires=${expiresAt}&signature=${signature}`;
+    const url = `${baseDomain}/objects/${bucketName}/${key}?expires=${expiresAt}&signature=${signature}`;
     
     return c.json({ url, expiresAt, isPublic: false });
   });
 
-  // === Object Metadata (x-amz-meta-*) ===
+  // === Object Metadata ===
   app.get('/:bucketName/:key{.+}/metadata', async (c) => {
+    const db = c.get('db');
     const bucketName = c.req.param('bucketName');
     const key = c.req.param('key');
 
@@ -85,6 +88,7 @@ export const objectRoutes = (db: DatabaseType) => {
   });
 
   app.put('/:bucketName/:key{.+}/metadata', async (c) => {
+    const db = c.get('db');
     const bucketName = c.req.param('bucketName');
     const key = c.req.param('key');
     const body = await c.req.json();
@@ -97,7 +101,6 @@ export const objectRoutes = (db: DatabaseType) => {
       .limit(1).execute();
     if (!object) return c.json({ error: 'Object not found' }, 404);
 
-    // Replace all metadata
     await db.delete(objectMetadata).where(eq(objectMetadata.objectId, object.id)).execute();
     
     const entries = Object.entries(body);
@@ -114,6 +117,7 @@ export const objectRoutes = (db: DatabaseType) => {
 
   // === Object Tags ===
   app.get('/:bucketName/:key{.+}/tagging', async (c) => {
+    const db = c.get('db');
     const bucketName = c.req.param('bucketName');
     const key = c.req.param('key');
 
@@ -133,6 +137,7 @@ export const objectRoutes = (db: DatabaseType) => {
   });
 
   app.put('/:bucketName/:key{.+}/tagging', async (c) => {
+    const db = c.get('db');
     const bucketName = c.req.param('bucketName');
     const key = c.req.param('key');
     const body = await c.req.json();
@@ -145,7 +150,6 @@ export const objectRoutes = (db: DatabaseType) => {
       .limit(1).execute();
     if (!object) return c.json({ error: 'Object not found' }, 404);
 
-    // Replace all tags
     await db.delete(objectTags).where(eq(objectTags.objectId, object.id)).execute();
     
     const entries = Object.entries(body);
@@ -163,6 +167,7 @@ export const objectRoutes = (db: DatabaseType) => {
   });
 
   app.delete('/:bucketName/:key{.+}/tagging', async (c) => {
+    const db = c.get('db');
     const bucketName = c.req.param('bucketName');
     const key = c.req.param('key');
 
@@ -180,6 +185,7 @@ export const objectRoutes = (db: DatabaseType) => {
 
   // === Object Versions ===
   app.get('/:bucketName/:key{.+}/versions', async (c) => {
+    const db = c.get('db');
     const bucketName = c.req.param('bucketName');
     const key = c.req.param('key');
 
@@ -207,6 +213,8 @@ export const objectRoutes = (db: DatabaseType) => {
 
   // Multipart - Initiate & Complete (Shared POST route)
   app.post('/:bucketName/:key{.+|[^/]+}', async (c) => {
+    const db = c.get('db');
+    const storage = c.get('storage');
     const bucketName = c.req.param('bucketName');
     const key = c.req.param('key');
     const isInitiate = c.req.query('uploads') !== undefined;
@@ -217,20 +225,18 @@ export const objectRoutes = (db: DatabaseType) => {
 
     // 1. Initiate Multipart Upload
     if (isInitiate) {
-      const newUploadId = crypto.randomUUID();
       const contentType = c.req.header('content-type') || 'application/octet-stream';
       
+      const storageUploadId = await storage.initiateMultipart(key, contentType);
+      
       await db.insert(multipartUploads).values({
-        id: newUploadId,
+        id: storageUploadId,
         bucketId: bucket.id,
         key,
         contentType
       }).execute();
 
-      // Create temp directory for parts
-      mkdirSync(join('storage/temp', newUploadId), { recursive: true });
-
-      return c.json({ uploadId: newUploadId, bucket: bucketName, key });
+      return c.json({ uploadId: storageUploadId, bucket: bucketName, key });
     }
 
     // 2. Complete Multipart Upload
@@ -241,31 +247,15 @@ export const objectRoutes = (db: DatabaseType) => {
       const parts = await db.select().from(uploadParts).where(eq(uploadParts.uploadId, uploadId)).orderBy(asc(uploadParts.partNumber)).execute();
       if (parts.length === 0) return c.json({ error: 'No parts uploaded' }, 400);
 
-      const hashHex = new Bun.CryptoHasher("sha256").update(`${bucketName}/${key}`).digest("hex");
-      const prefix = hashHex.slice(0, 2);
-      const storageDir = join('storage/objects', prefix);
-      mkdirSync(storageDir, { recursive: true });
-
-      // For versioned buckets, use a unique hash per version
+      const hashHex = await sha256(`${bucketName}/${key}`);
       const versionId = bucket.versioning === 'enabled' ? crypto.randomUUID() : null;
-      const storageHash = versionId ? new Bun.CryptoHasher("sha256").update(`${bucketName}/${key}/${versionId}`).digest("hex") : hashHex;
-      const finalPath = join(storageDir, `${storageHash}.object`);
+      const storageHash = versionId ? await sha256(`${bucketName}/${key}/${versionId}`) : hashHex;
 
-      const tempDir = join('storage/temp', uploadId);
+      // Complete the multipart in the storage provider
+      await storage.completeMultipart(key, uploadId, parts.map(p => ({ partNumber: p.partNumber, etag: p.etag })), storageHash);
+
       let totalSize = 0;
-      
-      if (existsSync(finalPath)) unlinkSync(finalPath);
-      
-      for (const part of parts) {
-        const partPath = join(tempDir, `${part.partNumber}.part`);
-        if (!existsSync(partPath)) {
-            rmSync(tempDir, { recursive: true, force: true });
-            return c.json({ error: `Part ${part.partNumber} missing from storage` }, 500);
-        }
-        const data = readFileSync(partPath);
-        appendFileSync(finalPath, data);
-        totalSize += part.size;
-      }
+      parts.forEach(p => { totalSize += p.size; });
 
       // If versioning is enabled, mark old versions as not latest
       if (bucket.versioning === 'enabled') {
@@ -291,7 +281,6 @@ export const objectRoutes = (db: DatabaseType) => {
         set: { size: totalSize, contentType: upload.contentType, hash: storageHash, isLatest: true }
       }).execute();
 
-      rmSync(tempDir, { recursive: true, force: true });
       await db.delete(multipartUploads).where(eq(multipartUploads.id, uploadId)).execute();
 
       return c.json({ status: 'completed', key, size: totalSize, versionId });
@@ -302,6 +291,8 @@ export const objectRoutes = (db: DatabaseType) => {
 
   // Upload object (Single Part) & Upload Part (Shared PUT route)
   app.put('/:bucketName/:key{.+|[^/]+}', async (c) => {
+    const db = c.get('db');
+    const storage = c.get('storage');
     const bucketName = c.req.param('bucketName');
     const key = c.req.param('key');
     const uploadId = c.req.query('uploadId');
@@ -318,10 +309,7 @@ export const objectRoutes = (db: DatabaseType) => {
       const [upload] = await db.select().from(multipartUploads).where(eq(multipartUploads.id, uploadId)).limit(1).execute();
       if (!upload) return c.json({ error: 'UploadId not found' }, 404);
 
-      const partPath = join('storage/temp', uploadId, `${partNumber}.part`);
-      await Bun.write(partPath, body);
-
-      const etag = new Bun.CryptoHasher("md5").update(body).digest("hex");
+      const { etag } = await storage.uploadPart(key, uploadId, partNumber, body);
       
       await db.insert(uploadParts).values({
         uploadId,
@@ -338,16 +326,14 @@ export const objectRoutes = (db: DatabaseType) => {
     }
 
     // 2. Single Part Upload (Default)
-    const baseHash = new Bun.CryptoHasher("sha256").update(`${bucketName}/${key}`).digest("hex");
+    const baseHash = await sha256(`${bucketName}/${key}`);
     const versionId = bucket.versioning === 'enabled' ? crypto.randomUUID() : null;
-    const storageHash = versionId ? new Bun.CryptoHasher("sha256").update(`${bucketName}/${key}/${versionId}`).digest("hex") : baseHash;
+    const storageHash = versionId ? await sha256(`${bucketName}/${key}/${versionId}`) : baseHash;
     
-    const prefix = storageHash.slice(0, 2);
-    const storageDir = join('storage/objects', prefix);
-    mkdirSync(storageDir, { recursive: true });
-    
-    const filePath = join(storageDir, `${storageHash}.object`);
-    await Bun.write(filePath, body);
+    const contentType = c.req.header('content-type') || 'application/octet-stream';
+
+    // Put standard object in storage
+    await storage.putObject(storageHash, body, contentType);
 
     // If versioning is enabled, mark old versions as not latest
     if (bucket.versioning === 'enabled') {
@@ -358,7 +344,6 @@ export const objectRoutes = (db: DatabaseType) => {
     }
 
     const id = crypto.randomUUID();
-    const contentType = c.req.header('content-type') || 'application/octet-stream';
 
     await db.insert(objects).values({
       id,
@@ -380,6 +365,8 @@ export const objectRoutes = (db: DatabaseType) => {
 
   // Download & Public Access
   app.get('/:bucketName/:key{.+|[^/]+}', async (c) => {
+    const db = c.get('db');
+    const storage = c.get('storage');
     const bucketName = c.req.param('bucketName');
     const key = c.req.param('key');
     const requestedVersionId = c.req.query('versionId');
@@ -415,14 +402,9 @@ export const objectRoutes = (db: DatabaseType) => {
     if (!object) return c.json({ error: 'Object not found' }, 404);
     if (object.isDeleteMarker) return c.json({ error: 'Object has been deleted (delete marker)' }, 404);
 
-    const prefix = object.hash.slice(0, 2);
-    const filePath = join('storage/objects', prefix, `${object.hash}.object`);
+    // Get the object stream or array buffer from storage provider
+    const arrayBuffer = await storage.getObject(object.hash);
 
-    if (!existsSync(filePath)) return c.json({ error: 'Storage file missing' }, 500);
-
-    const file = Bun.file(filePath);
-    const isView = c.req.query('view') === 'true';
-    
     let contentType = object.contentType || 'application/octet-stream';
     if (contentType === 'application/octet-stream') {
       const ext = key.split('.').pop()?.toLowerCase();
@@ -436,7 +418,7 @@ export const objectRoutes = (db: DatabaseType) => {
 
     const viewableTypes = ['image/', 'video/', 'audio/', 'application/pdf', 'text/'];
     const isMedia = viewableTypes.some(t => contentType.startsWith(t));
-    const disposition = (isView || isMedia) ? 'inline' : `attachment; filename="${key.split('/').pop()}"`;
+    const disposition = (c.req.query('view') === 'true' || isMedia) ? 'inline' : `attachment; filename="${key.split('/').pop()}"`;
 
     const headers: Record<string, string> = {
       'Content-Type': contentType,
@@ -444,11 +426,13 @@ export const objectRoutes = (db: DatabaseType) => {
     };
     if (object.versionId) headers['x-amz-version-id'] = object.versionId;
 
-    return c.body(await file.arrayBuffer(), 200, headers);
+    return c.body(arrayBuffer, 200, headers);
   });
 
   // Delete object & Abort Multipart (Shared DELETE route)
   app.delete('/:bucketName/:key{.+|[^/]+}', async (c) => {
+    const db = c.get('db');
+    const storage = c.get('storage');
     const bucketName = c.req.param('bucketName');
     const key = c.req.param('key');
     const uploadId = c.req.query('uploadId');
@@ -459,10 +443,9 @@ export const objectRoutes = (db: DatabaseType) => {
 
     // 1. Abort Multipart Upload
     if (uploadId) {
-        const tempDir = join('storage/temp', uploadId);
-        if (existsSync(tempDir)) rmSync(tempDir, { recursive: true, force: true });
-        await db.delete(multipartUploads).where(eq(multipartUploads.id, uploadId)).execute();
-        return c.json({ status: 'aborted', uploadId });
+      await storage.abortMultipart(key, uploadId);
+      await db.delete(multipartUploads).where(eq(multipartUploads.id, uploadId)).execute();
+      return c.json({ status: 'aborted', uploadId });
     }
 
     // 2. Versioned Delete
@@ -474,9 +457,9 @@ export const objectRoutes = (db: DatabaseType) => {
           .limit(1).execute();
         
         if (object) {
-          const prefix = object.hash.slice(0, 2);
-          const filePath = join('storage/objects', prefix, `${object.hash}.object`);
-          if (existsSync(filePath)) unlinkSync(filePath);
+          if (object.hash !== 'delete-marker') {
+            await storage.deleteObject(object.hash);
+          }
           await db.delete(objects).where(eq(objects.id, object.id)).execute();
           
           // If we deleted the latest, promote the next one
@@ -520,10 +503,9 @@ export const objectRoutes = (db: DatabaseType) => {
       .limit(1).execute();
       
     if (object) {
-      const prefix = object.hash.slice(0, 2);
-      const filePath = join('storage/objects', prefix, `${object.hash}.object`);
-      if (existsSync(filePath)) unlinkSync(filePath);
-      
+      if (object.hash !== 'delete-marker') {
+        await storage.deleteObject(object.hash);
+      }
       await db.delete(objects).where(and(eq(objects.bucketId, bucket.id), eq(objects.key, key))).execute();
     }
 

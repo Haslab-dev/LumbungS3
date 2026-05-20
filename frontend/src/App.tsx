@@ -1,16 +1,38 @@
 import { useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MainLayout } from './layouts/MainLayout';
-import { ViewType } from './layouts/Sidebar';
+import type { ViewType } from './layouts/Sidebar';
 import { DashboardOverview } from './features/dashboard/DashboardOverview';
 import { ObjectBrowser } from './features/buckets/ObjectBrowser';
+import { ObjectBucketSelector } from './features/buckets/ObjectBucketSelector';
 import { AccessKeyManager } from './features/security/AccessKeyManager';
+import { SharedLinksManager } from './features/shares/SharedLinksManager';
+import { PublicShareView } from './features/shares/PublicShareView';
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false, // Prevent refetching when browser window/tab is refocused
+      staleTime: 5000,            // Consider query data fresh for 5 seconds to prevent mount/routing loop calls
+    },
+  },
+});
 
 function App() {
   const [currentView, setCurrentView] = useState<ViewType>('overview');
   const [currentBucket, setCurrentBucket] = useState<string | null>(null);
+
+  // Check if the current URL is a public share path
+  const isSharePath = window.location.pathname.startsWith('/share/');
+  const shareId = isSharePath ? window.location.pathname.substring(7) : null;
+
+  if (isSharePath && shareId) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <PublicShareView shareId={shareId} />
+      </QueryClientProvider>
+    );
+  }
 
   const handleNavigate = (view: ViewType) => {
     setCurrentView(view);
@@ -37,14 +59,17 @@ function App() {
 
     switch (currentView) {
       case 'overview':
-      case 'buckets':
         return <DashboardOverview onSelectBucket={handleSelectBucket} />;
+      case 'buckets':
+        return <DashboardOverview onSelectBucket={handleSelectBucket} viewMode="buckets" />;
       case 'keys':
       case 'security':
         return <AccessKeyManager />;
+      case 'shares':
+        return <SharedLinksManager />;
       case 'objects':
         if (!currentBucket) {
-           return <DashboardOverview onSelectBucket={handleSelectBucket} />;
+           return <ObjectBucketSelector onSelectBucket={handleSelectBucket} />;
         }
         return null;
       default:
@@ -67,3 +92,4 @@ function App() {
 }
 
 export default App
+

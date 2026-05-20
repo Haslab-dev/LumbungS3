@@ -1,7 +1,7 @@
 import { FileText, Image as ImageIcon, Video, Music, File as FileIcon, X, Download, Share2, Copy, Check, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect } from 'react';
-import { presignObject } from '../../lib/api';
+import { presignObject, BASE_URL } from '../../lib/api';
 
 interface FilePreviewProps {
   isOpen: boolean;
@@ -18,7 +18,7 @@ export const FilePreview = ({ isOpen, onClose, bucketName, objectKey, contentTyp
   const [isGenerating, setIsGenerating] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
 
-  const downloadUrl = `http://localhost:9000/objects/${bucketName}/${objectKey}`;
+  const downloadUrl = `${BASE_URL}/objects/${bucketName}/${objectKey}`;
 
   // Reset and fetch preview URL on open
   useEffect(() => {

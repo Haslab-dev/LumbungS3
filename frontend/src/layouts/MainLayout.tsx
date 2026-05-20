@@ -1,4 +1,5 @@
-import { Sidebar, ViewType } from './Sidebar';
+import { Sidebar } from './Sidebar';
+import type { ViewType } from './Sidebar';
 import { Bell, Search, User } from 'lucide-react';
 
 interface MainLayoutProps {

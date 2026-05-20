@@ -2,7 +2,7 @@ import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card } from '../../components/ui/DashboardElements';
 import { File, Folder, MoreVertical, Search, Upload, Download, Trash2, Loader2, Plus, ArrowLeft, Eye } from 'lucide-react';
-import { getObjects, uploadObject, deleteObject } from '../../lib/api';
+import { getObjects, uploadObject, deleteObject, BASE_URL } from '../../lib/api';
 import { FilePreview } from '../../components/ui/FilePreview';
 
 interface ObjectBrowserProps {
@@ -243,7 +243,7 @@ export function ObjectBrowser({ bucketName, onBack }: ObjectBrowserProps) {
                               <Eye size={16} />
                             </button>
                             <a 
-                              href={`http://localhost:9000/objects/${bucketName}/${item.key}`}
+                              href={`${BASE_URL}/objects/${bucketName}/${item.key}`}
                               target="_blank"
                               rel="noreferrer"
                               className="p-2 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-all"

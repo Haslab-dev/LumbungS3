@@ -2,14 +2,15 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { StatCard, Card } from '../../components/ui/DashboardElements';
 import { Modal } from '../../components/ui/Modal';
-import { HardDrive, Layers, Activity, Server, ArrowUpRight, Plus, Loader2, Trash2, Globe, Lock } from 'lucide-react';
+import { HardDrive, Layers, Activity, Server, ArrowUpRight, Plus, Loader2, Trash2, Globe } from 'lucide-react';
 import { getBuckets, createBucket, deleteBucket, getMetrics, updateBucketVisibility } from '../../lib/api';
 
 interface DashboardOverviewProps {
   onSelectBucket: (name: string) => void;
+  viewMode?: 'overview' | 'buckets';
 }
 
-export function DashboardOverview({ onSelectBucket }: DashboardOverviewProps) {
+export function DashboardOverview({ onSelectBucket, viewMode = 'overview' }: DashboardOverviewProps) {
   const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newBucketName, setNewBucketName] = useState('');
@@ -20,10 +21,9 @@ export function DashboardOverview({ onSelectBucket }: DashboardOverviewProps) {
     queryFn: getBuckets
   });
 
-  const { data: metrics, isLoading: metricsLoading } = useQuery({
+  const { data: metrics } = useQuery({
     queryKey: ['metrics'],
     queryFn: getMetrics,
-    refetchInterval: 3000 // Refresh every 3s for "live" feel
   });
 
   const createBucketMutation = useMutation({
@@ -70,12 +70,21 @@ export function DashboardOverview({ onSelectBucket }: DashboardOverviewProps) {
     visibilityMutation.mutate({ id, visibility: next as 'public' | 'private' });
   };
 
+  const isOverview = viewMode === 'overview';
+
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <div className="flex justify-between items-end">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight text-white mb-1">Overview</h2>
-          <p className="text-slate-400">Welcome back. Here's what's happening with your storage nodes.</p>
+          <h2 className="text-3xl font-bold tracking-tight text-white mb-1">
+            {isOverview ? 'Overview' : 'Buckets'}
+          </h2>
+          <p className="text-slate-400">
+            {isOverview 
+              ? "Welcome back. Here's what's happening with your storage nodes."
+              : "Manage and configure your secure storage buckets."
+            }
+          </p>
         </div>
         <button className="btn-primary" onClick={() => setIsModalOpen(true)}>
           <Plus size={18} />
@@ -84,39 +93,43 @@ export function DashboardOverview({ onSelectBucket }: DashboardOverviewProps) {
       </div>
 
       {/* Metrics Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard 
-          title="Total Storage" 
-          value={metrics?.totalStorage || '0 GB'} 
-          icon={<HardDrive />} 
-          trend={{ value: 12, isUp: true }}
-          description={`${metrics?.usedPercentage || 0}% of 100GB limit`}
-        />
-        <StatCard 
-          title="Total Buckets" 
-          value={metrics?.bucketCount || 0} 
-          icon={<Layers />} 
-        />
-        <StatCard 
-          title="Objects Stored" 
-          value={metrics?.objectCount || 0} 
-          icon={<Server />} 
-          trend={{ value: 5, isUp: true }}
-        />
-        <StatCard 
-          title="System Uptime" 
-          value={metrics?.uptime || '99.9%'} 
-          icon={<Activity />} 
-          description="Running for 12 days"
-        />
-      </div>
+      {isOverview && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <StatCard 
+            title="Total Storage" 
+            value={metrics?.totalStorage || '0 GB'} 
+            icon={<HardDrive />} 
+            trend={{ value: 12, isUp: true }}
+            description={`${metrics?.usedPercentage || 0}% of 100GB limit`}
+          />
+          <StatCard 
+            title="Total Buckets" 
+            value={metrics?.bucketCount || 0} 
+            icon={<Layers />} 
+          />
+          <StatCard 
+            title="Objects Stored" 
+            value={metrics?.objectCount || 0} 
+            icon={<Server />} 
+            trend={{ value: 5, isUp: true }}
+          />
+          <StatCard 
+            title="System Uptime" 
+            value={metrics?.uptime || '99.9%'} 
+            icon={<Activity />} 
+            description="Running for 12 days"
+          />
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Recent Buckets */}
-        <div className="lg:col-span-2 space-y-4">
+        <div className={`${isOverview ? "lg:col-span-2" : "lg:col-span-3"} space-y-4`}>
           <div className="flex items-center justify-between px-2">
-            <h3 className="text-lg font-semibold text-white">Recent Buckets</h3>
-            <button className="text-indigo-400 text-sm hover:underline">View All</button>
+            <h3 className="text-lg font-semibold text-white">
+              {isOverview ? 'Recent Buckets' : 'All Buckets'}
+            </h3>
+            {isOverview && <button className="text-indigo-400 text-sm hover:underline">View All</button>}
           </div>
           
           <div className="space-y-3">
@@ -180,47 +193,49 @@ export function DashboardOverview({ onSelectBucket }: DashboardOverviewProps) {
         </div>
 
         {/* Real-time Throughput */}
-        <Card className="flex flex-col">
-          <h3 className="text-lg font-semibold text-white mb-6">Throughput</h3>
-          <div className="flex-1 flex flex-col justify-between">
-            <div className="space-y-4">
-              <div className="flex justify-between items-end">
-                <span className="text-xs text-slate-400">Incoming</span>
-                <span className="text-sm font-mono text-emerald-400">{metrics?.throughput?.in || '0 MB/s'}</span>
-              </div>
-              <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-emerald-500 transition-all duration-1000 ease-in-out shadow-[0_0_10px_rgba(16,185,129,0.3)]" 
-                  style={{ width: `${metrics?.throughput?.inPulse || 5}%` }}
-                />
-              </div>
-
-              <div className="flex justify-between items-end">
-                <span className="text-xs text-slate-400">Outgoing</span>
-                <span className="text-sm font-mono text-indigo-400">{metrics?.throughput?.out || '0 MB/s'}</span>
-              </div>
-              <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-indigo-500 transition-all duration-1000 ease-in-out shadow-[0_0_10px_rgba(99,102,241,0.3)]" 
-                  style={{ width: `${metrics?.throughput?.outPulse || 5}%` }}
-                />
-              </div>
-            </div>
-
-            <div className="mt-8 pt-6 border-t border-slate-700/50">
-              <div className="flex flex-col gap-2">
-                <div className="flex justify-between text-xs">
-                  <span className="text-slate-500">I/O Wait</span>
-                  <span className="text-slate-300">0.1ms</span>
+        {isOverview && (
+          <Card className="flex flex-col">
+            <h3 className="text-lg font-semibold text-white mb-6">Throughput</h3>
+            <div className="flex-1 flex flex-col justify-between">
+              <div className="space-y-4">
+                <div className="flex justify-between items-end">
+                  <span className="text-xs text-slate-400">Incoming</span>
+                  <span className="text-sm font-mono text-emerald-400">{metrics?.throughput?.in || '0 MB/s'}</span>
                 </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-slate-500">Disk Queue</span>
-                  <span className="text-slate-300">0.00</span>
+                <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-emerald-500 transition-all duration-1000 ease-in-out shadow-[0_0_10px_rgba(16,185,129,0.3)]" 
+                    style={{ width: `${metrics?.throughput?.inPulse || 5}%` }}
+                  />
+                </div>
+
+                <div className="flex justify-between items-end">
+                  <span className="text-xs text-slate-400">Outgoing</span>
+                  <span className="text-sm font-mono text-indigo-400">{metrics?.throughput?.out || '0 MB/s'}</span>
+                </div>
+                <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-indigo-500 transition-all duration-1000 ease-in-out shadow-[0_0_10px_rgba(99,102,241,0.3)]" 
+                    style={{ width: `${metrics?.throughput?.outPulse || 5}%` }}
+                  />
                 </div>
               </div>
+
+              <div className="mt-8 pt-6 border-t border-slate-700/50">
+                <div className="flex flex-col gap-2">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-slate-500">I/O Wait</span>
+                    <span className="text-slate-300">0.1ms</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-slate-500">Disk Queue</span>
+                    <span className="text-slate-300">0.00</span>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
-        </Card>
+          </Card>
+        )}
       </div>
 
       {/* Create Bucket Modal */}

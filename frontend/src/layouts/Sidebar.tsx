@@ -1,7 +1,7 @@
-import { LayoutGrid, Database, Key, ShieldCheck, Settings, Box } from 'lucide-react';
+import { LayoutGrid, Database, Key, ShieldCheck, Settings, Box, Link2 } from 'lucide-react';
 import { clsx } from 'clsx';
 
-export type ViewType = 'overview' | 'buckets' | 'objects' | 'keys' | 'security' | 'settings';
+export type ViewType = 'overview' | 'buckets' | 'objects' | 'keys' | 'security' | 'settings' | 'shares';
 
 interface SidebarProps {
   currentView: ViewType;
@@ -13,6 +13,7 @@ const navItems = [
   { id: 'buckets' as ViewType, icon: Database, label: 'Buckets' },
   { id: 'objects' as ViewType, icon: Box, label: 'Objects' },
   { id: 'keys' as ViewType, icon: Key, label: 'Access Keys' },
+  { id: 'shares' as ViewType, icon: Link2, label: 'Shared Links' },
   { id: 'security' as ViewType, icon: ShieldCheck, label: 'Security' },
   { id: 'settings' as ViewType, icon: Settings, label: 'Settings' },
 ];

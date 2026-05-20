@@ -1,17 +1,19 @@
 import { Hono } from 'hono';
 import { eq, desc } from 'drizzle-orm';
 import { buckets } from '../../db/schema';
-import type { DatabaseType } from '../../lib/db';
+import type { HonoEnv } from '../../index';
 
-export const bucketRoutes = (db: DatabaseType) => {
-  const app = new Hono();
+export const bucketRoutes = () => {
+  const app = new Hono<HonoEnv>();
 
   app.get('/', async (c) => {
+    const db = c.get('db');
     const allBuckets = await db.select().from(buckets).orderBy(desc(buckets.createdAt));
     return c.json(allBuckets);
   });
 
   app.post('/', async (c) => {
+    const db = c.get('db');
     const { name } = await c.req.json();
     if (!name) return c.json({ error: 'Name is required' }, 400);
 
@@ -22,12 +24,14 @@ export const bucketRoutes = (db: DatabaseType) => {
   });
 
   app.delete('/:id', async (c) => {
+    const db = c.get('db');
     const id = c.req.param('id');
     await db.delete(buckets).where(eq(buckets.id, id));
     return c.json({ status: 'deleted' });
   });
 
   app.patch('/:id/visibility', async (c) => {
+    const db = c.get('db');
     const id = c.req.param('id');
     const { visibility } = await c.req.json();
     if (!['public', 'private'].includes(visibility)) return c.json({ error: 'Invalid visibility' }, 400);
@@ -41,6 +45,7 @@ export const bucketRoutes = (db: DatabaseType) => {
 
   // Toggle versioning
   app.patch('/:id/versioning', async (c) => {
+    const db = c.get('db');
     const id = c.req.param('id');
     const { versioning } = await c.req.json();
     if (!['enabled', 'disabled', 'suspended'].includes(versioning)) {

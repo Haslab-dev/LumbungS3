@@ -81,3 +81,13 @@ export const uploadParts = sqliteTable("upload_parts", {
 }, (t) => ({
   unq: unique().on(t.uploadId, t.partNumber),
 }));
+
+export const shares = sqliteTable("shares", {
+  id: text("id").primaryKey(), // Unique sharing token/UUID
+  objectId: text("object_id").notNull().references(() => objects.id, { onDelete: 'cascade' }),
+  bucketName: text("bucket_name").notNull(),
+  key: text("key").notNull(),
+  createdAt: text("created_at").default(sql`(CURRENT_TIMESTAMP)`),
+  expiresAt: text("expires_at"), // Optional ISO string or null (never expires)
+});
+

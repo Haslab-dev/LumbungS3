@@ -1,15 +1,16 @@
 import { Hono } from 'hono';
 import { eq, and, desc, lt } from 'drizzle-orm';
-import { join } from 'node:path';
-import { existsSync, unlinkSync } from 'node:fs';
 import { buckets, objects, lifecycleRules } from '../../db/schema';
 import type { DatabaseType } from '../../lib/db';
+import type { StorageProvider } from '../../lib/storage';
+import type { HonoEnv } from '../../index';
 
-export const lifecycleRoutes = (db: DatabaseType) => {
-  const app = new Hono();
+export const lifecycleRoutes = () => {
+  const app = new Hono<HonoEnv>();
 
   // List lifecycle rules for a bucket
   app.get('/:bucketId', async (c) => {
+    const db = c.get('db');
     const bucketId = c.req.param('bucketId');
     const rules = await db.select().from(lifecycleRules)
       .where(eq(lifecycleRules.bucketId, bucketId))
@@ -20,6 +21,7 @@ export const lifecycleRoutes = (db: DatabaseType) => {
 
   // Create a lifecycle rule
   app.post('/:bucketId', async (c) => {
+    const db = c.get('db');
     const bucketId = c.req.param('bucketId');
     const body = await c.req.json();
 
@@ -42,6 +44,7 @@ export const lifecycleRoutes = (db: DatabaseType) => {
 
   // Update a lifecycle rule
   app.patch('/:bucketId/:ruleId', async (c) => {
+    const db = c.get('db');
     const ruleId = c.req.param('ruleId');
     const body = await c.req.json();
 
@@ -58,6 +61,7 @@ export const lifecycleRoutes = (db: DatabaseType) => {
 
   // Delete a lifecycle rule
   app.delete('/:bucketId/:ruleId', async (c) => {
+    const db = c.get('db');
     const ruleId = c.req.param('ruleId');
     await db.delete(lifecycleRules).where(eq(lifecycleRules.id, ruleId)).execute();
     return c.json({ status: 'deleted' });
@@ -67,7 +71,7 @@ export const lifecycleRoutes = (db: DatabaseType) => {
 };
 
 // Lifecycle evaluation engine (called periodically or on-demand)
-export const evaluateLifecycleRules = async (db: DatabaseType) => {
+export const evaluateLifecycleRules = async (db: DatabaseType, storage: StorageProvider) => {
   const rules = await db.select().from(lifecycleRules)
     .where(eq(lifecycleRules.status, 'enabled'))
     .execute();
@@ -94,10 +98,12 @@ export const evaluateLifecycleRules = async (db: DatabaseType) => {
       });
 
       for (const obj of filtered) {
-        const prefix = obj.hash.slice(0, 2);
-        const filePath = join('storage/objects', prefix, `${obj.hash}.object`);
-        if (obj.hash !== 'delete-marker' && existsSync(filePath)) {
-          unlinkSync(filePath);
+        if (obj.hash !== 'delete-marker') {
+          try {
+            await storage.deleteObject(obj.hash);
+          } catch (e) {
+            console.error(`Failed to delete storage file for object ${obj.id}:`, (e as Error).message);
+          }
         }
         await db.delete(objects).where(eq(objects.id, obj.id)).execute();
         actionsCount++;
@@ -123,10 +129,12 @@ export const evaluateLifecycleRules = async (db: DatabaseType) => {
       });
 
       for (const obj of filtered) {
-        const prefix = obj.hash.slice(0, 2);
-        const filePath = join('storage/objects', prefix, `${obj.hash}.object`);
-        if (obj.hash !== 'delete-marker' && existsSync(filePath)) {
-          unlinkSync(filePath);
+        if (obj.hash !== 'delete-marker') {
+          try {
+            await storage.deleteObject(obj.hash);
+          } catch (e) {
+            console.error(`Failed to delete storage file for object ${obj.id}:`, (e as Error).message);
+          }
         }
         await db.delete(objects).where(eq(objects.id, obj.id)).execute();
         actionsCount++;

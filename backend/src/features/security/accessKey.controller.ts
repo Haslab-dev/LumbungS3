@@ -1,12 +1,13 @@
 import { Hono } from 'hono';
 import { eq, desc } from 'drizzle-orm';
 import { accessKeys } from '../../db/schema';
-import type { DatabaseType } from '../../lib/db';
+import type { HonoEnv } from '../../index';
 
-export const accessKeyRoutes = (db: DatabaseType) => {
-  const app = new Hono();
+export const accessKeyRoutes = () => {
+  const app = new Hono<HonoEnv>();
 
   app.get('/', async (c) => {
+    const db = c.get('db');
     const keys = await db.select({
       id: accessKeys.id,
       accessKey: accessKeys.accessKey,
@@ -17,6 +18,7 @@ export const accessKeyRoutes = (db: DatabaseType) => {
   });
 
   app.post('/', async (c) => {
+    const db = c.get('db');
     const id = crypto.randomUUID();
     const accessKey = `LBG${crypto.randomUUID().replace(/-/g, '').slice(0, 17).toUpperCase()}`;
     const secretKey = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '');
@@ -32,6 +34,7 @@ export const accessKeyRoutes = (db: DatabaseType) => {
   });
 
   app.delete('/:id', async (c) => {
+    const db = c.get('db');
     const id = c.req.param('id');
     await db.delete(accessKeys).where(eq(accessKeys.id, id));
     return c.json({ status: 'deleted' });

@@ -14,11 +14,15 @@
     "test": "bun test",
     "db:push": "drizzle-kit push",
     "db:generate": "drizzle-kit generate",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "deploy": "bun run build && wrangler pages deploy dist"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1050.0",
+    "@libsql/client": "^0.17.3",
     "@tailwindcss/vite": "^4.2.1",
     "@tanstack/react-query": "^5.90.21",
+    "@xmldom/xmldom": "^0.9.10",
     "axios": "^1.13.6",
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.1",

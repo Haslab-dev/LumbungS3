@@ -2,14 +2,11 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card } from '../../components/ui/DashboardElements';
 import { Modal } from '../../components/ui/Modal';
-import { Key, Plus, Trash2, Eye, EyeOff, Copy, Loader2, ShieldCheck, ShieldAlert } from 'lucide-react';
-import axios from 'axios';
-
-const api = axios.create({ baseURL: 'http://localhost:9000/api' });
+import { Key, Plus, Trash2, Copy, Loader2, ShieldCheck, ShieldAlert } from 'lucide-react';
+import api from '../../lib/api';
 
 export function AccessKeyManager() {
   const queryClient = useQueryClient();
-  const [showSecrets, setShowSecrets] = useState<Record<string, boolean>>({});
   const [newKeyData, setNewKeyData] = useState<any>(null);
 
   const { data: keys = [], isLoading } = useQuery({
@@ -39,10 +36,6 @@ export function AccessKeyManager() {
       queryClient.invalidateQueries({ queryKey: ['access-keys'] });
     }
   });
-
-  const toggleSecret = (id: string) => {
-    setShowSecrets(prev => ({ ...prev, [id]: !prev[id] }));
-  };
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -93,7 +86,7 @@ export function AccessKeyManager() {
                       <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Secret Access Key</p>
                       <div className="flex items-center gap-2">
                         <code className="text-sm text-slate-300 font-mono">
-                          {showSecrets[key.id] ? "****************************************" : "••••••••••••••••••••••••••••••••"}
+                          ••••••••••••••••••••••••••••••••
                         </code>
                         <span className="text-[10px] text-slate-600 bg-slate-800 px-2 py-0.5 rounded italic">Hidden for security</span>
                       </div>
