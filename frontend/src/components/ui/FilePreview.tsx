@@ -1,4 +1,4 @@
-import { FileText, Image as ImageIcon, Video, Music, File as FileIcon, X, Download, Share2, Copy, Check, Loader2, ZoomIn, ZoomOut, RotateCw, RefreshCw } from 'lucide-react';
+import { FileText, Image as ImageIcon, Video, Music, File as FileIcon, X, Download, Share2, Copy, Check, Loader2, ZoomIn, ZoomOut, RotateCw, RefreshCw, Eye, Link, ChevronDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect, useRef } from 'react';
 import { presignObject, BASE_URL } from '../../lib/api';
@@ -13,12 +13,11 @@ interface FilePreviewProps {
 }
 
 export const FilePreview = ({ isOpen, onClose, bucketName, objectKey, contentType, size }: FilePreviewProps) => {
-  const [presignedUrl, setPresignedUrl] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [isGenerating, setIsGenerating] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
+  const [shareDropdownOpen, setShareDropdownOpen] = useState(false);
+  const shareDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Advanced interactive states
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -28,6 +27,30 @@ export const FilePreview = ({ isOpen, onClose, bucketName, objectKey, contentTyp
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const downloadUrl = `${BASE_URL}/objects/${bucketName}/${objectKey}`;
+  const viewerUrl = `${window.location.origin}/objects/${bucketName}/${objectKey}?viewer=true`;
+  const directUrl = `${window.location.origin}/objects/${bucketName}/${objectKey}`;
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (shareDropdownRef.current && !shareDropdownRef.current.contains(e.target as Node)) {
+        setShareDropdownOpen(false);
+      }
+    };
+    if (shareDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [shareDropdownOpen]);
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setIsCopied(true);
+    setShareDropdownOpen(false);
+    setTimeout(() => setIsCopied(false), 2000);
+  };
+
+  const handleShareViewer = () => copyToClipboard(viewerUrl);
+  const handleShareLink = () => copyToClipboard(directUrl);
 
   // Reset and fetch preview URL on open
   useEffect(() => {
@@ -49,7 +72,6 @@ export const FilePreview = ({ isOpen, onClose, bucketName, objectKey, contentTyp
       });
     } else {
       setPreviewUrl(null);
-      setPresignedUrl(null);
       setIsPlaying(false);
     }
   }, [isOpen, bucketName, objectKey]);
@@ -67,28 +89,6 @@ export const FilePreview = ({ isOpen, onClose, bucketName, objectKey, contentTyp
     const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
-
-  const handleShare = async () => {
-    if (presignedUrl) {
-      navigator.clipboard.writeText(presignedUrl);
-      setIsCopied(true);
-      setTimeout(() => setIsCopied(false), 2000);
-      return;
-    }
-
-    setIsGenerating(true);
-    try {
-      const data = await presignObject(bucketName, objectKey);
-      setPresignedUrl(data.url);
-      navigator.clipboard.writeText(data.url);
-      setIsCopied(true);
-      setTimeout(() => setIsCopied(false), 2000);
-    } catch (error) {
-      console.error('Failed to generate presigned URL', error);
-    } finally {
-      setIsGenerating(false);
-    }
   };
 
   const handleZoomIn = () => setZoom(prev => Math.min(prev + 0.25, 3));
@@ -328,9 +328,9 @@ export const FilePreview = ({ isOpen, onClose, bucketName, objectKey, contentTyp
                 <Download size={16} />
                 Download Document
               </a>
-              <button onClick={handleShare} className="btn-secondary justify-center">
-                {isGenerating ? <Loader2 className="animate-spin" size={16} /> : (isCopied ? <Check size={16} /> : <Share2 size={16} />)}
-                {isCopied ? 'Link Copied' : 'Share Presigned Link'}
+              <button onClick={handleShareViewer} className="btn-secondary justify-center">
+                {isCopied ? <Check size={16} /> : <Eye size={16} />}
+                {isCopied ? 'Link Copied' : 'Share with Viewer'}
               </button>
             </div>
           </div>
@@ -372,9 +372,9 @@ export const FilePreview = ({ isOpen, onClose, bucketName, objectKey, contentTyp
             <Download size={18} />
             Download File
           </a>
-          <button onClick={handleShare} className="btn-secondary justify-center">
-            {isGenerating ? <Loader2 className="animate-spin" size={18} /> : (isCopied ? <Check size={18} /> : <Share2 size={18} />)}
-            {isCopied ? 'Copied Link' : 'Share Link'}
+          <button onClick={handleShareViewer} className="btn-secondary justify-center">
+            {isCopied ? <Check size={18} /> : <Eye size={18} />}
+            {isCopied ? 'Copied Link' : 'Share with Viewer'}
           </button>
         </div>
       </div>
@@ -408,14 +408,60 @@ export const FilePreview = ({ isOpen, onClose, bucketName, objectKey, contentTyp
             </div>
             
             <div className="flex items-center gap-2 shrink-0">
-              <button
-                onClick={handleShare}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all text-xs font-bold uppercase tracking-wider cursor-pointer ${isCopied ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-indigo-500/20 text-indigo-400 hover:bg-indigo-500/30 border border-indigo-500/10'}`}
-                title="Share Presigned URL"
-              >
-                {isGenerating ? <Loader2 size={14} className="animate-spin" /> : (isCopied ? <Check size={14} /> : <Share2 size={14} />)}
-                <span className="hidden sm:inline">{isCopied ? 'Link Copied' : 'Share'}</span>
-              </button>
+              <div className="relative" ref={shareDropdownRef}>
+                <button
+                  onClick={() => setShareDropdownOpen(!shareDropdownOpen)}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all text-xs font-bold uppercase tracking-wider cursor-pointer ${
+                    isCopied
+                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                      : 'bg-indigo-500/20 text-indigo-400 hover:bg-indigo-500/30 border border-indigo-500/10'
+                  }`}
+                  title="Share"
+                >
+                  {isCopied ? <Check size={14} /> : <Share2 size={14} />}
+                  <span className="hidden sm:inline">{isCopied ? 'Copied!' : 'Share'}</span>
+                  {!isCopied && <ChevronDown size={12} className={`transition-transform ${shareDropdownOpen ? 'rotate-180' : ''}`} />}
+                </button>
+                <AnimatePresence>
+                  {shareDropdownOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -6, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -6, scale: 0.95 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute right-0 top-full mt-2 w-64 bg-slate-900 border border-slate-700/60 rounded-xl shadow-2xl shadow-black/50 overflow-hidden z-[60]"
+                    >
+                      <button
+                        onClick={handleShareViewer}
+                        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-800/80 transition-colors cursor-pointer group"
+                      >
+                        <div className="p-2 bg-indigo-500/15 rounded-lg border border-indigo-500/20 text-indigo-400 group-hover:bg-indigo-500/25 transition-colors">
+                          <Eye size={16} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-white">Media Viewer</p>
+                          <p className="text-[11px] text-slate-500 truncate">{viewerUrl}</p>
+                        </div>
+                        <Copy size={14} className="text-slate-600 group-hover:text-slate-400 shrink-0" />
+                      </button>
+                      <div className="h-px bg-slate-800/80 mx-3"></div>
+                      <button
+                        onClick={handleShareLink}
+                        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-800/80 transition-colors cursor-pointer group"
+                      >
+                        <div className="p-2 bg-emerald-500/15 rounded-lg border border-emerald-500/20 text-emerald-400 group-hover:bg-emerald-500/25 transition-colors">
+                          <Link size={16} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-white">Direct Link</p>
+                          <p className="text-[11px] text-slate-500 truncate">{directUrl}</p>
+                        </div>
+                        <Copy size={14} className="text-slate-600 group-hover:text-slate-400 shrink-0" />
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
               <a 
                 href={downloadUrl}
                 className="p-2 hover:bg-slate-800 bg-slate-900 border border-slate-800 rounded-lg text-slate-300 hover:text-white transition-all flex items-center justify-center animate-none"
@@ -424,7 +470,7 @@ export const FilePreview = ({ isOpen, onClose, bucketName, objectKey, contentTyp
                 <Download size={18} />
               </a>
               <button
-                onClick={() => { setPresignedUrl(null); onClose(); }}
+                onClick={onClose}
                 className="p-2 hover:bg-red-500/20 border border-transparent hover:border-red-500/30 rounded-lg text-slate-400 hover:text-red-400 transition-all flex items-center justify-center cursor-pointer ml-1"
                 title="Close"
               >
@@ -438,25 +484,6 @@ export const FilePreview = ({ isOpen, onClose, bucketName, objectKey, contentTyp
             {renderPreview()}
           </div>
           
-          {/* Share URL Display if generated */}
-          {presignedUrl && (
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="absolute bottom-6 right-6 max-w-md p-4 glass-card rounded-xl border border-indigo-500/30 flex items-center justify-between gap-4 shadow-2xl z-[100] backdrop-blur-md"
-            >
-              <div className="flex-1 truncate">
-                 <p className="text-[10px] text-indigo-400 font-bold uppercase mb-1 tracking-widest">Public Gateway URL (Expires in 1h)</p>
-                 <code className="text-xs text-white bg-slate-900/50 px-2 py-1 rounded truncate block">{presignedUrl}</code>
-              </div>
-              <button 
-                onClick={() => { navigator.clipboard.writeText(presignedUrl); setIsCopied(true); setTimeout(() => setIsCopied(false), 2000); }}
-                className="p-3 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 rounded-xl transition-all shrink-0 cursor-pointer"
-              >
-                {isCopied ? <Check size={20} /> : <Copy size={20} />}
-              </button>
-            </motion.div>
-          )}
         </motion.div>
       )}
     </AnimatePresence>

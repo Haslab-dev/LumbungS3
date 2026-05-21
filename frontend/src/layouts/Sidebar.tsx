@@ -1,7 +1,7 @@
-import { LayoutGrid, Database, ShieldCheck, Settings, Box, Link2, LogOut, X, Users } from 'lucide-react';
+import { LayoutGrid, Database, ShieldCheck, Settings, Box, LogOut, X, Users } from 'lucide-react';
 import { clsx } from 'clsx';
 
-export type ViewType = 'overview' | 'buckets' | 'objects' | 'security' | 'settings' | 'shares' | 'users';
+export type ViewType = 'overview' | 'buckets' | 'objects' | 'security' | 'settings' | 'users';
 
 interface SidebarProps {
   currentView: ViewType;
@@ -17,13 +17,12 @@ export const Sidebar = ({ currentView, onNavigate, isOpen = false, onClose, onLo
     { id: 'overview' as ViewType, icon: LayoutGrid, label: 'Overview' },
     { id: 'buckets' as ViewType, icon: Database, label: 'Buckets' },
     { id: 'objects' as ViewType, icon: Box, label: 'Objects' },
-    { id: 'shares' as ViewType, icon: Link2, label: 'Shared Links' },
     { id: 'security' as ViewType, icon: ShieldCheck, label: 'Security' },
     { id: 'settings' as ViewType, icon: Settings, label: 'Settings' },
   ];
 
   if (userRole === 'admin') {
-    navItems.splice(5, 0, { id: 'users' as ViewType, icon: Users, label: 'Users' });
+    navItems.splice(4, 0, { id: 'users' as ViewType, icon: Users, label: 'Users' });
   }
   return (
     <aside className={clsx(

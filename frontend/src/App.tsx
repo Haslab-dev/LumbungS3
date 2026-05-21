@@ -6,7 +6,6 @@ import { DashboardOverview } from './features/dashboard/DashboardOverview';
 import { ObjectBrowser } from './features/buckets/ObjectBrowser';
 import { ObjectBucketSelector } from './features/buckets/ObjectBucketSelector';
 import { AccessKeyManager } from './features/security/AccessKeyManager';
-import { SharedLinksManager } from './features/shares/SharedLinksManager';
 import { PublicShareView } from './features/shares/PublicShareView';
 import { DirectObjectView } from './features/shares/DirectObjectView';
 import { Login } from './features/auth/Login';
@@ -132,8 +131,6 @@ function App() {
         return <DashboardOverview onSelectBucket={handleSelectBucket} viewMode="buckets" />;
       case 'security':
         return <AccessKeyManager />;
-      case 'shares':
-        return <SharedLinksManager />;
       case 'users':
         return <UserManagement />;
       case 'objects':

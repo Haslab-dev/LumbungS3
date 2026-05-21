@@ -420,8 +420,7 @@ export const objectRoutes = () => {
     const acceptHeader = c.req.header('accept') || '';
     const isBrowserNavigate = acceptHeader.includes('text/html');
     
-    // Redirect browser navigations to the beautiful SPA viewer unless they explicitly want raw bytes
-    if (isBrowserNavigate && c.req.query('raw') !== 'true') {
+    if (isBrowserNavigate && c.req.query('viewer') === 'true') {
       const searchParams = new URLSearchParams();
       if (c.req.query('expires')) searchParams.set('expires', c.req.query('expires')!);
       if (c.req.query('signature')) searchParams.set('signature', c.req.query('signature')!);
