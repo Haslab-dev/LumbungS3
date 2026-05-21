@@ -31,7 +31,7 @@ import { shareRoutes } from './features/shares/share.controller';
 import { authRoutes } from './features/auth/auth.controller';
 import { adminAuth } from './lib/auth';
 import { buckets, objects } from './db/schema';
-import { sql } from 'drizzle-orm';
+import { sql, eq } from 'drizzle-orm';
 
 // Dynamically load wrangler.jsonc variables into process.env when running locally (Bun/Node)
 // We use eval("require") to completely shield node:fs from Wrangler's Pages compiler/bundler.
@@ -109,11 +109,31 @@ app.use('/*', async (c, next) => {
 app.get('/api/metrics', adminAuth(), async (c) => {
   try {
     const db = c.get('db');
-    const bucketCountData = await db.select({ total: sql<number>`count(*)` }).from(buckets);
-    const objectStatsData = await db.select({ 
-      total: sql<number>`count(*)`, 
-      size: sql<number>`sum(size)` 
-    }).from(objects);
+    const user = c.get('user' as any);
+    const userId: string | null = user?.userId ?? null;
+
+    let bucketCountData;
+    let objectStatsData;
+
+    if (userId === null) {
+      bucketCountData = await db.select({ total: sql<number>`count(*)` }).from(buckets);
+      objectStatsData = await db.select({ 
+        total: sql<number>`count(*)`, 
+        size: sql<number>`sum(size)` 
+      }).from(objects);
+    } else {
+      bucketCountData = await db.select({ total: sql<number>`count(*)` })
+        .from(buckets)
+        .where(eq(buckets.userId, userId));
+      
+      objectStatsData = await db.select({ 
+        total: sql<number>`count(${objects.id})`, 
+        size: sql<number>`sum(${objects.size})` 
+      })
+      .from(objects)
+      .innerJoin(buckets, eq(objects.bucketId, buckets.id))
+      .where(eq(buckets.userId, userId));
+    }
     
     const bucketCount = Number(bucketCountData[0]?.total || 0);
     const objectCount = Number(objectStatsData[0]?.total || 0);

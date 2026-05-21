@@ -1,9 +1,82 @@
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card } from '../../components/ui/DashboardElements';
-import { File, Folder, MoreVertical, Search, Upload, Download, Trash2, Loader2, Plus, ArrowLeft, Eye } from 'lucide-react';
+import { File as FileIcon, Folder, MoreVertical, Search, Upload, Download, Trash2, Loader2, Plus, ArrowLeft, Eye, Settings } from 'lucide-react';
 import { getObjects, uploadObject, deleteObject, BASE_URL } from '../../lib/api';
 import { FilePreview } from '../../components/ui/FilePreview';
+
+const compressImage = (file: File, quality: number, maxDimension: number): Promise<File> => {
+  return new Promise((resolve) => {
+    if (!file.type.startsWith('image/')) {
+      resolve(file);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (maxDimension > 0 && (width > maxDimension || height > maxDimension)) {
+          if (width > height) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          } else {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(file);
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const outputType = file.type === 'image/png' || file.type === 'image/jpeg' || file.type === 'image/webp'
+          ? (file.type === 'image/png' ? 'image/jpeg' : file.type)
+          : 'image/jpeg';
+
+        let name = file.name;
+        if (file.type === 'image/png' && outputType === 'image/jpeg') {
+          name = name.replace(/\.png$/i, '.jpg');
+        }
+
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              resolve(file);
+              return;
+            }
+            if (blob.size < file.size) {
+              const compressedFile = new File([blob], name, {
+                type: outputType,
+                lastModified: Date.now(),
+              });
+              resolve(compressedFile);
+            } else {
+              resolve(file);
+            }
+          },
+          outputType,
+          quality
+        );
+      };
+      img.onerror = () => resolve(file);
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = () => resolve(file);
+    reader.readAsDataURL(file);
+  });
+};
 
 interface ObjectBrowserProps {
   bucketName: string;
@@ -17,6 +90,11 @@ export function ObjectBrowser({ bucketName, onBack }: ObjectBrowserProps) {
   const [currentPrefix, setCurrentPrefix] = useState('');
   const [previewObject, setPreviewObject] = useState<any>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [compressImages, setCompressImages] = useState(false);
+  const [compressionQuality, setCompressionQuality] = useState(0.75);
+  const [maxImageDimension, setMaxImageDimension] = useState(2048);
+  const [showUploadSettings, setShowUploadSettings] = useState(false);
+  const [isCompressing, setIsCompressing] = useState(false);
 
   const { data: objects = [], isLoading } = useQuery({
     queryKey: ['objects', bucketName, currentPrefix],
@@ -43,9 +121,19 @@ export function ObjectBrowser({ bucketName, onBack }: ObjectBrowserProps) {
     }
   });
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    let file = e.target.files?.[0];
     if (file) {
+      if (compressImages && file.type.startsWith('image/')) {
+        setIsCompressing(true);
+        try {
+          file = await compressImage(file, compressionQuality, maxImageDimension);
+        } catch (err) {
+          console.error('Failed to compress image:', err);
+        } finally {
+          setIsCompressing(false);
+        }
+      }
       setUploadProgress(1); // Set initial state
       uploadMutation.mutate({ key: file.name, file });
     }
@@ -162,16 +250,16 @@ export function ObjectBrowser({ bucketName, onBack }: ObjectBrowserProps) {
             onChange={handleFileUpload}
           />
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-1 md:flex-none">
-            {uploadMutation.isPending && (
+            {(uploadMutation.isPending || isCompressing) && (
               <div className="flex flex-col gap-1 w-full sm:w-32 sm:mr-2">
                 <div className="flex justify-between sm:justify-end text-[10px] font-bold text-indigo-400 uppercase tracking-widest">
-                  <span className="sm:hidden">Uploading</span>
-                  <span>{uploadProgress}%</span>
+                  <span className="sm:hidden">{isCompressing ? 'Compressing' : 'Uploading'}</span>
+                  <span>{isCompressing ? '...' : `${uploadProgress}%`}</span>
                 </div>
                 <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
                   <div 
-                    className="h-full bg-indigo-500 transition-all duration-300" 
-                    style={{ width: `${uploadProgress}%` }}
+                    className={`h-full transition-all duration-300 ${isCompressing ? 'bg-indigo-400 animate-pulse w-full' : 'bg-indigo-500'}`} 
+                    style={isCompressing ? {} : { width: `${uploadProgress}%` }}
                   />
                 </div>
               </div>
@@ -179,18 +267,102 @@ export function ObjectBrowser({ bucketName, onBack }: ObjectBrowserProps) {
             <button 
               className="btn-secondary w-full sm:w-auto justify-center cursor-pointer"
               onClick={() => fileInputRef.current?.click()}
-              disabled={uploadMutation.isPending}
+              disabled={uploadMutation.isPending || isCompressing}
             >
-              {uploadMutation.isPending ? <Loader2 className="animate-spin" size={18} /> : <Upload size={18} />}
-              {uploadMutation.isPending ? 'Uploading...' : 'Upload'}
+              {uploadMutation.isPending || isCompressing ? <Loader2 className="animate-spin" size={18} /> : <Upload size={18} />}
+              {isCompressing ? 'Compressing...' : uploadMutation.isPending ? 'Uploading...' : 'Upload'}
             </button>
           </div>
+          <button 
+            type="button"
+            className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-center ${
+              showUploadSettings 
+                ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30' 
+                : 'bg-slate-800/50 text-slate-400 border-slate-700/50 hover:bg-slate-800 hover:text-white'
+            }`}
+            onClick={() => setShowUploadSettings(!showUploadSettings)}
+            title="Upload Settings"
+          >
+            <Settings size={18} className={showUploadSettings ? 'animate-spin' : ''} />
+          </button>
           <button className="btn-primary w-full sm:w-auto justify-center cursor-pointer">
             <Plus size={18} />
             Create Folder
           </button>
         </div>
       </div>
+
+      {showUploadSettings && (
+        <div className="bg-slate-800/20 p-4 rounded-2xl border border-slate-700/30 space-y-4 animate-in slide-in-from-top-2 duration-200">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h4 className="text-sm font-semibold text-white">Image Compression</h4>
+              <p className="text-xs text-slate-500 mt-0.5">Automatically compress large JPEG, PNG, or WebP images before uploading to save storage.</p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input 
+                type="checkbox" 
+                checked={compressImages} 
+                onChange={(e) => setCompressImages(e.target.checked)} 
+                className="sr-only peer" 
+              />
+              <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-slate-400 peer-checked:after:bg-indigo-400 after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600/30 border border-slate-700 peer-checked:border-indigo-500/40"></div>
+            </label>
+          </div>
+
+          {compressImages && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-3 border-t border-slate-800/60 animate-in fade-in duration-200">
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <label className="text-xs font-semibold text-slate-400">Compression Quality</label>
+                  <span className="text-xs font-bold text-indigo-400">{Math.round(compressionQuality * 100)}%</span>
+                </div>
+                <input 
+                  type="range" 
+                  min="0.1" 
+                  max="1.0" 
+                  step="0.05" 
+                  value={compressionQuality} 
+                  onChange={(e) => setCompressionQuality(parseFloat(e.target.value))} 
+                  className="w-full accent-indigo-500 bg-slate-800 h-1.5 rounded-lg appearance-none cursor-pointer"
+                />
+                <div className="flex justify-between text-[10px] text-slate-600 font-bold uppercase">
+                  <span>Small Size</span>
+                  <span>Balanced</span>
+                  <span>Best Quality</span>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-slate-400">Max Resolution (Dimension)</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { label: 'Original', value: 0 },
+                    { label: '2K (2048px)', value: 2048 },
+                    { label: 'HD (1080px)', value: 1080 }
+                  ].map((opt) => (
+                    <button
+                      key={opt.label}
+                      type="button"
+                      onClick={() => setMaxImageDimension(opt.value)}
+                      className={`py-1.5 px-3 rounded-lg text-xs font-medium border transition-all cursor-pointer ${
+                        maxImageDimension === opt.value
+                          ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30'
+                          : 'bg-slate-900/40 text-slate-400 border-slate-800 hover:bg-slate-800 hover:text-white'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Images larger than this will be resized proportionally.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Desktop Table View (Hidden on mobile) */}
       <Card className="p-0 overflow-hidden border-slate-700/30 bg-slate-900/30 hidden md:block">
@@ -225,7 +397,7 @@ export function ObjectBrowser({ bucketName, onBack }: ObjectBrowserProps) {
                             ? 'bg-amber-500/10 text-amber-500 border-amber-500/20 group-hover:bg-amber-500/20 shadow-lg shadow-amber-500/10' 
                             : 'bg-slate-800 text-indigo-400 border-slate-700 group-hover:bg-indigo-500/10 group-hover:border-indigo-500/30'
                         }`}>
-                          {item.type === 'folder' ? <Folder size={16} fill="currentColor" fillOpacity={0.2} /> : <File size={16} />}
+                          {item.type === 'folder' ? <Folder size={16} fill="currentColor" fillOpacity={0.2} /> : <FileIcon size={16} />}
                         </div>
                         <span className="text-sm font-medium text-white">{item.key}</span>
                       </div>
@@ -301,7 +473,7 @@ export function ObjectBrowser({ bucketName, onBack }: ObjectBrowserProps) {
                       ? 'bg-amber-500/10 text-amber-500 border-amber-500/20 shadow-lg shadow-amber-500/10' 
                       : 'bg-slate-800 text-indigo-400 border-slate-700'
                   }`}>
-                    {item.type === 'folder' ? <Folder size={16} fill="currentColor" fillOpacity={0.2} /> : <File size={16} />}
+                    {item.type === 'folder' ? <Folder size={16} fill="currentColor" fillOpacity={0.2} /> : <FileIcon size={16} />}
                   </div>
                   <span className="text-sm font-semibold text-white break-all" title={item.key}>
                     {item.key}

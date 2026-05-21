@@ -57,7 +57,8 @@ export const adminAuth = (): MiddlewareHandler => {
     }
 
     const token = authHeader.substring(7);
-    const secret = c.env.ADMIN_PASSWORD || 'lumbungs3admin';
+    const safeProcessEnv = typeof process !== 'undefined' ? process.env : {} as Record<string, string | undefined>;
+    const secret = c.env?.ADMIN_PASSWORD || safeProcessEnv.ADMIN_PASSWORD || 'lumbungs3admin';
     const payload = await verifyToken(token, secret);
 
     if (!payload) {
@@ -80,7 +81,8 @@ export const superAdminAuth = (): MiddlewareHandler => {
     }
 
     const token = authHeader.substring(7);
-    const secret = c.env.ADMIN_PASSWORD || 'lumbungs3admin';
+    const safeProcessEnv = typeof process !== 'undefined' ? process.env : {} as Record<string, string | undefined>;
+    const secret = c.env?.ADMIN_PASSWORD || safeProcessEnv.ADMIN_PASSWORD || 'lumbungs3admin';
     const payload = await verifyToken(token, secret);
 
     if (!payload) {

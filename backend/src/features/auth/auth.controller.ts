@@ -52,8 +52,9 @@ export const authRoutes = () => {
       const { email, password } = await c.req.json();
       const db = c.get('db');
 
-      const expectedUsername = c.env.ADMIN_USERNAME as string;
-      const expectedPassword = c.env.ADMIN_PASSWORD as string;
+      const safeProcessEnv = typeof process !== 'undefined' ? process.env : {} as Record<string, string | undefined>;
+      const expectedUsername = c.env?.ADMIN_USERNAME || safeProcessEnv.ADMIN_USERNAME || 'admin@mail.com';
+      const expectedPassword = c.env?.ADMIN_PASSWORD || safeProcessEnv.ADMIN_PASSWORD || 'lumbungs3admin';
       let username = email;
 
       let role = 'user';
