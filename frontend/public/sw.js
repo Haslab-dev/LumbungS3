@@ -47,34 +47,31 @@ self.addEventListener('fetch', (event) => {
     return; // Pass through natively to network
   }
 
+  // Network-First strategy to prevent stale caches during builds while maintaining offline support
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse; // Return cache match
-      }
-
-      return fetch(event.request)
-        .then((networkResponse) => {
-          // Verify network response validity before caching
-          if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
-            return networkResponse;
-          }
-
-          // Cache newly loaded static assets dynamically (e.g. hashed Vite chunks)
+    fetch(event.request)
+      .then((networkResponse) => {
+        // Verify network response validity before caching
+        if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
           const responseToCache = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
             cache.put(event.request, responseToCache);
           });
-
-          return networkResponse;
-        })
-        .catch(() => {
+        }
+        return networkResponse;
+      })
+      .catch(() => {
+        // Fallback to cache when network is unavailable
+        return caches.match(event.request).then((cachedResponse) => {
+          if (cachedResponse) {
+            return cachedResponse;
+          }
           // If offline and request is document, return root index.html
           if (event.request.mode === 'navigate') {
             return caches.match('/');
           }
           return null;
         });
-    })
+      })
   );
 });

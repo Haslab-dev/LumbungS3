@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card } from '../../components/ui/DashboardElements';
-import { File as FileIcon, Folder, MoreVertical, Search, Upload, Download, Trash2, Loader2, Plus, ArrowLeft, Eye, Settings } from 'lucide-react';
+import { File as FileIcon, Folder, MoreVertical, Search, Upload, Download, Trash2, Loader2, Plus, ArrowLeft, Eye, Settings, LayoutGrid, List } from 'lucide-react';
 import { getObjects, uploadObject, deleteObject, BASE_URL } from '../../lib/api';
 import { FilePreview } from '../../components/ui/FilePreview';
 
@@ -95,6 +95,12 @@ export function ObjectBrowser({ bucketName, onBack }: ObjectBrowserProps) {
   const [maxImageDimension, setMaxImageDimension] = useState(2048);
   const [showUploadSettings, setShowUploadSettings] = useState(false);
   const [isCompressing, setIsCompressing] = useState(false);
+  const [viewType, setViewType] = useState<'grid' | 'list'>('grid');
+
+  const isImageFile = (key: string) => {
+    const ext = key.split('.').pop()?.toLowerCase();
+    return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'].includes(ext || '');
+  };
 
   const { data: objects = [], isLoading } = useQuery({
     queryKey: ['objects', bucketName, currentPrefix],
@@ -231,15 +237,43 @@ export function ObjectBrowser({ bucketName, onBack }: ObjectBrowserProps) {
       </div>
 
       <div className="flex flex-col md:flex-row gap-4 justify-between items-stretch md:items-center bg-slate-800/20 p-4 rounded-2xl border border-slate-700/30">
-        <div className="flex items-center gap-3 bg-slate-900/50 px-4 py-2.5 rounded-xl border border-slate-700/50 w-full md:w-96">
-          <Search size={18} className="text-slate-500" />
-          <input 
-            type="text" 
-            placeholder="Search items..." 
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="bg-transparent border-none outline-none text-sm text-slate-300 w-full placeholder:text-slate-600"
-          />
+        <div className="flex items-center gap-3 w-full md:w-auto flex-1">
+          <div className="flex items-center gap-3 bg-slate-900/50 px-4 py-2.5 rounded-xl border border-slate-700/50 flex-1 md:w-96">
+            <Search size={18} className="text-slate-500" />
+            <input 
+              type="text" 
+              placeholder="Search items..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="bg-transparent border-none outline-none text-sm text-slate-300 w-full placeholder:text-slate-600"
+            />
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0 bg-slate-900/40 p-1.5 rounded-xl border border-slate-800">
+            <button 
+              type="button"
+              className={`p-1.5 rounded-lg transition-all cursor-pointer flex items-center justify-center ${
+                viewType === 'grid' 
+                  ? 'bg-indigo-500/10 text-indigo-400' 
+                  : 'text-slate-500 hover:text-slate-300'
+              }`}
+              onClick={() => setViewType('grid')}
+              title="Grid View"
+            >
+              <LayoutGrid size={16} />
+            </button>
+            <button 
+              type="button"
+              className={`p-1.5 rounded-lg transition-all cursor-pointer flex items-center justify-center ${
+                viewType === 'list' 
+                  ? 'bg-indigo-500/10 text-indigo-400' 
+                  : 'text-slate-500 hover:text-slate-300'
+              }`}
+              onClick={() => setViewType('list')}
+              title="List View"
+            >
+              <List size={16} />
+            </button>
+          </div>
         </div>
 
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
@@ -364,170 +398,264 @@ export function ObjectBrowser({ bucketName, onBack }: ObjectBrowserProps) {
         </div>
       )}
 
-      {/* Desktop Table View (Hidden on mobile) */}
-      <Card className="p-0 overflow-hidden border-slate-700/30 bg-slate-900/30 hidden md:block">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="border-b border-slate-700/50 bg-slate-800/30">
-                <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Name</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Size</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Last Modified</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider w-20"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-700/30">
-              {isLoading ? (
-                <tr>
-                  <td colSpan={4} className="px-6 py-12 text-center">
-                    <Loader2 className="animate-spin text-indigo-500 mx-auto" size={32} />
-                  </td>
-                </tr>
-              ) : processedItems.length > 0 ? (
-                processedItems.map((item: any) => (
-                  <tr 
-                    key={item.id} 
-                    className="hover:bg-slate-700/20 transition-colors group cursor-pointer"
-                    onClick={() => item.type === 'folder' ? navigateToFolder(item.key) : setPreviewObject(item)}
-                  >
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all border ${
-                          item.type === 'folder' 
-                            ? 'bg-amber-500/10 text-amber-500 border-amber-500/20 group-hover:bg-amber-500/20 shadow-lg shadow-amber-500/10' 
-                            : 'bg-slate-800 text-indigo-400 border-slate-700 group-hover:bg-indigo-500/10 group-hover:border-indigo-500/30'
-                        }`}>
-                          {item.type === 'folder' ? <Folder size={16} fill="currentColor" fillOpacity={0.2} /> : <FileIcon size={16} />}
+      {viewType === 'grid' ? (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {isLoading ? (
+            <div className="col-span-full py-12 flex justify-center">
+              <Loader2 className="animate-spin text-indigo-500" size={32} />
+            </div>
+          ) : processedItems.length > 0 ? (
+            processedItems.map((item: any) => {
+              const isImg = item.type === 'file' && isImageFile(item.key);
+              const imgUrl = `${BASE_URL}/objects/${bucketName}/${item.key}`;
+
+              return (
+                <Card 
+                  key={item.id} 
+                  className="p-3 border-slate-700/40 hover:border-indigo-500/25 transition-all bg-slate-900/30 group cursor-pointer flex flex-col justify-between h-48 relative overflow-hidden"
+                  onClick={() => item.type === 'folder' ? navigateToFolder(item.key) : setPreviewObject(item)}
+                >
+                  <div className="space-y-2 flex-1 flex flex-col min-w-0">
+                    {/* Visual Preview / Icon */}
+                    <div className="h-28 w-full rounded-lg bg-slate-950/60 border border-slate-800/40 overflow-hidden flex items-center justify-center relative shrink-0">
+                      {item.type === 'folder' ? (
+                        <Folder size={40} className="text-amber-500" fill="currentColor" fillOpacity={0.15} />
+                      ) : isImg ? (
+                        <img 
+                          src={imgUrl} 
+                          alt={item.key} 
+                          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" 
+                          loading="lazy"
+                        />
+                      ) : (
+                        <FileIcon size={32} className="text-indigo-400" />
+                      )}
+
+                      {/* Overlays / Action Buttons */}
+                      {item.type === 'file' && (
+                        <div 
+                          className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-950/80 p-1 rounded-lg backdrop-blur-sm"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button 
+                            className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition-all cursor-pointer"
+                            onClick={() => setPreviewObject(item)}
+                            title="Preview"
+                          >
+                            <Eye size={14} />
+                          </button>
+                          <a 
+                            href={imgUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition-all cursor-pointer"
+                            title="Download"
+                          >
+                            <Download size={14} />
+                          </a>
+                          <button 
+                            onClick={() => deleteMutation.mutate(item.key)}
+                            className="p-1 hover:bg-rose-500/20 rounded text-slate-400 hover:text-rose-400 transition-all cursor-pointer"
+                            title="Delete"
+                          >
+                            <Trash2 size={14} />
+                          </button>
                         </div>
-                        <span className="text-sm font-medium text-white">{item.key}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-slate-400 font-mono">
-                      {item.type === 'file' ? formatSize(item.size) : '--'}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-slate-500 text-xs">
-                      {item.type === 'file' ? new Date(item.createdAt).toLocaleString() : '--'}
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {item.type === 'file' ? (
-                          <>
-                            <button 
-                              className="p-2 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-all cursor-pointer"
-                              onClick={(e) => { e.stopPropagation(); setPreviewObject(item); }}
-                            >
-                              <Eye size={16} />
-                            </button>
-                            <a 
-                              href={`${BASE_URL}/objects/${bucketName}/${item.key}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="p-2 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-all cursor-pointer"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <Download size={16} />
-                            </a>
-                            <button 
-                              onClick={(e) => { e.stopPropagation(); deleteMutation.mutate(item.key); }}
-                              className="p-2 hover:bg-rose-500/20 rounded-lg text-slate-400 hover:text-rose-400 transition-all border border-transparent hover:border-rose-500/30 cursor-pointer"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </>
-                        ) : (
-                          <MoreVertical size={16} className="text-slate-600" />
+                      )}
+                    </div>
+
+                    {/* Metadata */}
+                    <div className="px-1 min-w-0 flex-1 flex flex-col justify-end">
+                      <p className="text-sm font-semibold text-white truncate break-all" title={item.key}>
+                        {item.key}
+                      </p>
+                      <div className="flex items-center justify-between text-[10px] text-slate-500 mt-0.5">
+                        <span>{item.type === 'file' ? formatSize(item.size) : 'Folder'}</span>
+                        {item.type === 'file' && (
+                          <span className="truncate ml-2">{new Date(item.createdAt).toLocaleDateString()}</span>
                         )}
                       </div>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={4} className="px-6 py-12 text-center text-slate-500 italic text-sm">
-                    No items found in this {currentPrefix ? 'folder' : 'bucket'}.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                    </div>
+                  </div>
+                </Card>
+              );
+            })
+          ) : (
+            <div className="col-span-full text-center py-12 glass-card rounded-2xl border-dashed border-2 border-slate-700">
+              <Folder size={36} className="mx-auto text-slate-600 mb-2" />
+              <h4 className="text-sm font-semibold text-slate-300">No items found</h4>
+              <p className="text-xs text-slate-500 mt-1">This directory is empty.</p>
+            </div>
+          )}
         </div>
-      </Card>
+      ) : (
+        <>
+          {/* Desktop Table View (Hidden on mobile) */}
+          <Card className="p-0 overflow-hidden border-slate-700/30 bg-slate-900/30 hidden md:block">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="border-b border-slate-700/50 bg-slate-800/30">
+                    <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Name</th>
+                    <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Size</th>
+                    <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Last Modified</th>
+                    <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider w-20"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-700/30">
+                  {isLoading ? (
+                    <tr>
+                      <td colSpan={4} className="px-6 py-12 text-center">
+                        <Loader2 className="animate-spin text-indigo-500 mx-auto" size={32} />
+                      </td>
+                    </tr>
+                  ) : processedItems.length > 0 ? (
+                    processedItems.map((item: any) => (
+                      <tr 
+                        key={item.id} 
+                        className="hover:bg-slate-700/20 transition-colors group cursor-pointer"
+                        onClick={() => item.type === 'folder' ? navigateToFolder(item.key) : setPreviewObject(item)}
+                      >
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all border ${
+                              item.type === 'folder' 
+                                ? 'bg-amber-500/10 text-amber-500 border-amber-500/20 group-hover:bg-amber-500/20 shadow-lg shadow-amber-500/10' 
+                                : 'bg-slate-800 text-indigo-400 border-slate-700 group-hover:bg-indigo-500/10 group-hover:border-indigo-500/30'
+                            }`}>
+                              {item.type === 'folder' ? <Folder size={16} fill="currentColor" fillOpacity={0.2} /> : <FileIcon size={16} />}
+                            </div>
+                            <span className="text-sm font-medium text-white">{item.key}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-slate-400 font-mono">
+                          {item.type === 'file' ? formatSize(item.size) : '--'}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-slate-500 text-xs">
+                          {item.type === 'file' ? new Date(item.createdAt).toLocaleString() : '--'}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            {item.type === 'file' ? (
+                              <>
+                                <button 
+                                  className="p-2 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-all cursor-pointer"
+                                  onClick={(e) => { e.stopPropagation(); setPreviewObject(item); }}
+                                >
+                                  <Eye size={16} />
+                                </button>
+                                <a 
+                                  href={`${BASE_URL}/objects/${bucketName}/${item.key}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="p-2 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-all cursor-pointer"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <Download size={16} />
+                                </a>
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); deleteMutation.mutate(item.key); }}
+                                  className="p-2 hover:bg-rose-500/20 rounded-lg text-slate-400 hover:text-rose-400 transition-all border border-transparent hover:border-rose-500/30 cursor-pointer"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </>
+                            ) : (
+                              <MoreVertical size={16} className="text-slate-600" />
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={4} className="px-6 py-12 text-center text-slate-500 italic text-sm">
+                        No items found in this {currentPrefix ? 'folder' : 'bucket'}.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
 
-      {/* Mobile Card List View (Visible only on mobile/tablet) */}
-      <div className="grid grid-cols-1 gap-4 md:hidden">
-        {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="animate-spin text-indigo-500" size={32} />
-          </div>
-        ) : processedItems.length > 0 ? (
-          processedItems.map((item: any) => (
-            <Card 
-              key={item.id} 
-              className="p-4 border-slate-700/40 hover:border-indigo-500/25 transition-all bg-slate-900/30 group cursor-pointer"
-              onClick={() => item.type === 'folder' ? navigateToFolder(item.key) : setPreviewObject(item)}
-            >
-              <div className="flex justify-between items-start gap-3">
-                <div className="flex items-center gap-3 min-w-0 flex-1">
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all border shrink-0 ${
-                    item.type === 'folder' 
-                      ? 'bg-amber-500/10 text-amber-500 border-amber-500/20 shadow-lg shadow-amber-500/10' 
-                      : 'bg-slate-800 text-indigo-400 border-slate-700'
-                  }`}>
-                    {item.type === 'folder' ? <Folder size={16} fill="currentColor" fillOpacity={0.2} /> : <FileIcon size={16} />}
-                  </div>
-                  <span className="text-sm font-semibold text-white break-all" title={item.key}>
-                    {item.key}
-                  </span>
-                </div>
-
-                {item.type === 'file' && (
-                  <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-                    <button 
-                      className="p-2 hover:bg-slate-750 bg-slate-800/80 rounded-lg text-slate-400 hover:text-white transition-all border border-slate-700/40 cursor-pointer"
-                      onClick={() => setPreviewObject(item)}
-                    >
-                      <Eye size={14} />
-                    </button>
-                    <a 
-                      href={`${BASE_URL}/objects/${bucketName}/${item.key}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="p-2 hover:bg-slate-750 bg-slate-800/80 rounded-lg text-slate-400 hover:text-white transition-all border border-slate-700/40 cursor-pointer"
-                    >
-                      <Download size={14} />
-                    </a>
-                    <button 
-                      onClick={() => deleteMutation.mutate(item.key)}
-                      className="p-2 bg-slate-800/80 hover:bg-rose-500/20 rounded-lg text-slate-400 hover:text-rose-400 transition-all border border-slate-700/40 hover:border-rose-500/30 cursor-pointer"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                )}
+          {/* Mobile Card List View (Visible only on mobile/tablet) */}
+          <div className="grid grid-cols-1 gap-4 md:hidden">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="animate-spin text-indigo-500" size={32} />
               </div>
+            ) : processedItems.length > 0 ? (
+              processedItems.map((item: any) => (
+                <Card 
+                  key={item.id} 
+                  className="p-4 border-slate-700/40 hover:border-indigo-500/25 transition-all bg-slate-900/30 group cursor-pointer"
+                  onClick={() => item.type === 'folder' ? navigateToFolder(item.key) : setPreviewObject(item)}
+                >
+                  <div className="flex justify-between items-start gap-3">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all border shrink-0 ${
+                        item.type === 'folder' 
+                          ? 'bg-amber-500/10 text-amber-500 border-amber-500/20 shadow-lg shadow-amber-500/10' 
+                          : 'bg-slate-800 text-indigo-400 border-slate-700'
+                      }`}>
+                        {item.type === 'folder' ? <Folder size={16} fill="currentColor" fillOpacity={0.2} /> : <FileIcon size={16} />}
+                      </div>
+                      <span className="text-sm font-semibold text-white break-all" title={item.key}>
+                        {item.key}
+                      </span>
+                    </div>
 
-              {item.type === 'file' && (
-                <div className="grid grid-cols-2 gap-y-2 gap-x-4 text-xs pt-3 mt-3 border-t border-slate-800/60">
-                  <div>
-                    <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Size</p>
-                    <p className="text-slate-300 font-mono mt-0.5">{formatSize(item.size)}</p>
+                    {item.type === 'file' && (
+                      <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                        <button 
+                          className="p-2 hover:bg-slate-750 bg-slate-800/80 rounded-lg text-slate-400 hover:text-white transition-all border border-slate-700/40 cursor-pointer"
+                          onClick={() => setPreviewObject(item)}
+                        >
+                          <Eye size={14} />
+                        </button>
+                        <a 
+                          href={`${BASE_URL}/objects/${bucketName}/${item.key}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="p-2 hover:bg-slate-750 bg-slate-800/80 rounded-lg text-slate-400 hover:text-white transition-all border border-slate-700/40 cursor-pointer"
+                        >
+                          <Download size={14} />
+                        </a>
+                        <button 
+                          onClick={() => deleteMutation.mutate(item.key)}
+                          className="p-2 bg-slate-800/80 hover:bg-rose-500/20 rounded-lg text-slate-400 hover:text-rose-400 transition-all border border-slate-700/40 hover:border-rose-500/30 cursor-pointer"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    )}
                   </div>
-                  <div>
-                    <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Last Modified</p>
-                    <p className="text-slate-400 mt-0.5 font-medium">{new Date(item.createdAt).toLocaleString()}</p>
-                  </div>
-                </div>
-              )}
-            </Card>
-          ))
-        ) : (
-          <div className="text-center py-12 glass-card rounded-2xl border-dashed border-2 border-slate-700">
-            <Folder size={36} className="mx-auto text-slate-600 mb-2" />
-            <h4 className="text-sm font-semibold text-slate-300">No items found</h4>
-            <p className="text-xs text-slate-500 mt-1">This directory is empty.</p>
+
+                  {item.type === 'file' && (
+                    <div className="grid grid-cols-2 gap-y-2 gap-x-4 text-xs pt-3 mt-3 border-t border-slate-800/60">
+                      <div>
+                        <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Size</p>
+                        <p className="text-slate-300 font-mono mt-0.5">{formatSize(item.size)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Last Modified</p>
+                        <p className="text-slate-400 mt-0.5 font-medium">{new Date(item.createdAt).toLocaleString()}</p>
+                      </div>
+                    </div>
+                  )}
+                </Card>
+              ))
+            ) : (
+              <div className="text-center py-12 glass-card rounded-2xl border-dashed border-2 border-slate-700">
+                <Folder size={36} className="mx-auto text-slate-600 mb-2" />
+                <h4 className="text-sm font-semibold text-slate-300">No items found</h4>
+                <p className="text-xs text-slate-500 mt-1">This directory is empty.</p>
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </>
+      )}
 
       <FilePreview 
         isOpen={!!previewObject}
